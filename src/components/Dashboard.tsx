@@ -23,7 +23,6 @@ import { cn } from '../utils';
 export function Dashboard() {
   const { user, profile } = useAuth();
   const [data, setData] = useState<BatchStudent[]>([]);
-  const [filterOptions, setFilterOptions] = useState<{ centers: string[], batches: { batch_code: string, center_code: string }[] }>({ centers: [], batches: [] });
   const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
@@ -39,20 +38,12 @@ export function Dashboard() {
   const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>({});
 
   useEffect(() => {
-    fetchFilterOptions();
+    fetchBatchStudents();
   }, [user]);
 
   useEffect(() => {
-    if (selectedBatch && selectedCenter) {
-      fetchBatchStudents(selectedCenter, selectedBatch);
-    } else {
-      setData([]);
-    }
-  }, [selectedBatch, selectedCenter]);
-
-  useEffect(() => {
     const fetchExistingValidations = async () => {
-      if (!selectedBatch || !selectedCenter || data.length === 0) {
+      if (!selectedBatch || !selectedCenter) {
         setValidations({});
         return;
       }
@@ -96,32 +87,20 @@ export function Dashboard() {
     fetchExistingValidations();
   }, [selectedBatch, selectedCenter, data]);
 
-  const fetchFilterOptions = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch('/api/filters/options');
-      if (!res.ok) throw new Error('Failed to fetch filter options');
-      const options = await res.json();
-      setFilterOptions(options);
-    } catch (e) {
-      console.error('Error fetching filters:', e);
-    }
-  };
-
-  const fetchBatchStudents = async (center: string, batch: string) => {
+  const fetchBatchStudents = async () => {
     if (!user) return;
     setFetchingData(true);
     try {
-      const res = await fetch(`/api/batch_students/filter?center_code=${encodeURIComponent(center)}&batch_code=${encodeURIComponent(batch)}`);
+      const res = await fetch('/api/batch_data');
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to fetch batch data from API');
       }
-      const batchData = await res.json();
-      setData(batchData as BatchStudent[]);
+      const allData = await res.json();
+      setData(allData as BatchStudent[]);
     } catch (error: any) {
       console.error('Error fetching batch data:', error.message);
-      toast.error('Failed to load students for this batch');
+      toast.error('Failed to load batch data');
     } finally {
       setFetchingData(false);
     }
@@ -203,24 +182,13 @@ export function Dashboard() {
           if (newRecordsToInsert.length === 0) {
              toast.success('No new records to insert. All data already exists.');
           } else {
-             // Insert in chunks to avoid Payload Too Large errors
-             const insertChunkSize = 500;
-             for (let i = 0; i < newRecordsToInsert.length; i += insertChunkSize) {
-               const chunk = newRecordsToInsert.slice(i, i + insertChunkSize);
-               const { error } = await supabase.from('batch_students').insert(chunk);
-               if (error) {
-                 console.error('Supabase error inserting batch data:', error);
-                 throw new Error(error.message);
-               }
+             const { error } = await supabase.from('batch_students').insert(newRecordsToInsert);
+             if (error) {
+               console.error('Supabase error inserting batch data:', error);
+               throw new Error(error.message);
              }
              toast.success(`Successfully added ${newRecordsToInsert.length} new records!`);
-             fetchFilterOptions(); // Refresh filters
-             if (selectedCenter && selectedBatch) {
-               fetchBatchStudents(selectedCenter, selectedBatch);
-             } else if (newRecordsToInsert.length > 0) {
-               setSelectedCenter(newRecordsToInsert[0].center_code);
-               setSelectedBatch(newRecordsToInsert[0].batch_code);
-             }
+             fetchBatchStudents(); // Refresh data
           }
         } else {
           toast.error("No valid records found in Excel");
@@ -230,8 +198,6 @@ export function Dashboard() {
         console.error(error);
       } finally {
         setLoading(false);
-        // Reset the file input so the same file could be uploaded again
-        if (e.target) { e.target.value = ''; }
       }
     };
     reader.readAsBinaryString(file);
@@ -254,15 +220,21 @@ export function Dashboard() {
   ];
 
   const centerCodes = useMemo(() => {
-    return filterOptions.centers;
-  }, [filterOptions]);
+    return Array.from(new Set(data.map(row => row.center_code).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+  }, [data]);
 
   const batchCodes = useMemo(() => {
     if (!selectedCenter) return [];
-    return filterOptions.batches
-      .filter(b => b.center_code === selectedCenter)
-      .map(b => b.batch_code);
-  }, [filterOptions, selectedCenter]);
+    return Array.from(new Set(
+      data
+        .filter(row => 
+          String(row.center_code) === String(selectedCenter) && 
+          String(row.batch_status).toLowerCase() === 'running'
+        )
+        .map(row => row.batch_code)
+        .filter(Boolean)
+    )).sort((a, b) => String(a).localeCompare(String(b)));
+  }, [data, selectedCenter]);
 
   const filteredStudents = useMemo(() => {
     if (!selectedBatch || !selectedCenter) return [];

@@ -60,8 +60,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     try {
       const res = await fetch('/api/admin/db-check');
       const data = await res.json();
-      console.log('DbStatus:', data);
-      setDbStatus({ ...data }); 
+      setDbStatus(data);
     } catch (e) {
       console.error('DB check failed', e);
     }
@@ -93,26 +92,24 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
 
   const [batchStats, setBatchStats] = useState<Record<string, { total: number, validated: number, pending: number }>>({});
 
-  const [batchActivity, setBatchActivity] = useState<any[]>([]);
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [allValsRes, pData, batchStatsRes, activityRes] = await Promise.all([
-        fetch('/api/admin/all_validations'), // Limit this in future or use search
+      const [allValsRes, pData, batchStatsRes] = await Promise.all([
+        fetch('/api/admin/all_validations'),
         fetchAllTableData('profiles'),
-        fetch('/api/batch_stats'),
-        fetch('/api/admin/batch_activity')
+        fetch('/api/batch_stats')
       ]);
 
       const vData = allValsRes.ok ? await allValsRes.json() : [];
       const stats = batchStatsRes.ok ? await batchStatsRes.json() : {};
-      const activityData = activityRes.ok ? await activityRes.json() : [];
       
       // Deduplicate validations by student_code for admin panel (latest validation per student)
       const uniqueValsMap = new Map();
-      vData.forEach((v: any) => {
+      vData.forEach(v => {
         const key = `${v.center_code}_${v.batch_code}_${v.student_code}`;
+        // vData is ordered by created_at desc (newest first). 
+        // We only want to keep the newest validation status per student.
         if (!uniqueValsMap.has(key)) {
            uniqueValsMap.set(key, v);
         }
@@ -123,7 +120,6 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       setAllValidations(vData);
       setValidations(deduplicatedValidations);
       setUsers(pData || []);
-      setBatchActivity(activityData);
     } catch (error: any) {
       toast.error('Error fetching data');
       console.error(error);
@@ -278,43 +274,58 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   );
 
   const batchActivityData = React.useMemo(() => {
-    // Merge batchActivity (pre-aggregated server-side) with batchStats (counts)
-    const statsData = batchActivity.map(act => {
-      const stats = batchStats[act.batch_code] || { total: 0, validated: 0, pending: 0 };
-      return {
-        ...act,
-        id: act.batch_code,
-        total: stats.total,
-        validated: stats.validated,
-        pending: stats.pending,
-        status: stats.total > 0 && stats.pending === 0 ? "Completed" : "Partial"
-      };
+    const grouped = new Map<string, any>();
+    
+    // First, initialize from allValidations to collect validated_by and latest created_at
+    allValidations.forEach(v => {
+      if (!grouped.has(v.batch_code)) {
+        grouped.set(v.batch_code, {
+          id: v.batch_code,
+          batch_code: v.batch_code,
+          validated_by: v.validated_by || 'Unknown',
+          created_at: v.created_at,
+          validatorSet: new Set(v.validated_by ? [v.validated_by] : [])
+        });
+      } else {
+        const current = grouped.get(v.batch_code);
+        if (v.validated_by) {
+          current.validatorSet.add(v.validated_by);
+          current.validated_by = Array.from(current.validatorSet).join(', ');
+        }
+        // Keep the latest timestamp
+        if (v.created_at && (!current.created_at || new Date(v.created_at) > new Date(current.created_at))) {
+          current.created_at = v.created_at;
+        }
+      }
     });
 
-    // Also include batches from batchStats that had no activity yet
-    const activityBatchCodes = new Set(batchActivity.map(a => a.batch_code));
-    const noActivityStats = Object.entries(batchStats)
-      .filter(([code]) => !activityBatchCodes.has(code))
-      .map(([code, stats]) => {
-        const s = stats as { total: number, validated: number, pending: number };
-        return {
+    // Second, ensure all batches from batchStats are included and have correct numbers
+    Object.keys(batchStats).forEach(code => {
+      const bs = batchStats[code];
+      if (!grouped.has(code)) {
+        grouped.set(code, {
           id: code,
           batch_code: code,
-          validated_by: 'N/A',
-          created_at: 'N/A',
-          total: s.total,
-          validated: s.validated,
-          pending: s.pending,
-          status: s.total > 0 && s.pending === 0 ? "Completed" : "Partial"
-        };
-      });
-
-    return [...statsData, ...noActivityStats].sort((a, b) => {
-        if (a.created_at === 'N/A') return 1;
-        if (b.created_at === 'N/A') return -1;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          status: bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial",
+          total: bs.total,
+          validated: bs.validated,
+          pending: bs.pending,
+          validated_by: 'System',
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        const current = grouped.get(code);
+        current.total = bs.total;
+        current.validated = bs.validated;
+        current.pending = bs.pending;
+        current.status = bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial";
+      }
     });
-  }, [batchActivity, batchStats]);
+
+    return Array.from(grouped.values()).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [allValidations, batchStats]);
 
   const filteredBatchActivities = batchActivityData.filter(v => 
     v.batch_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
