@@ -833,7 +833,7 @@ async function setupServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     // Check missing paths and serve index.html (SPA fallback)
