@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Teal Glass Effect Palette */
+  --color-brand-light: rgba(45, 212, 191, 0.1);
+  --color-brand-bg: #ccfbf1;
+  --color-brand-border: rgba(20, 184, 166, 0.3);
+  --color-brand-primary: #0d9488;
+  --color-brand-hover: #0f766e;
+  --color-brand-text: #134e4a;
+  --color-brand-muted: rgba(20, 184, 166, 0.4);
+  --color-brand-input: rgba(255, 255, 255, 0.6);
+  --color-brand-stripe: rgba(255, 255, 255, 0.4);
+  --color-brand-divide: rgba(20, 184, 166, 0.2);
+
+  --animate-blob: blob 7s infinite;
+}
+
+@layer base {
+  body {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+    background-attachment: fixed;
+    @apply text-slate-800 antialiased font-sans min-h-screen;
+  }
+}
+
+.glass-panel {
+  @apply bg-white/50 backdrop-blur-lg border border-white/40 shadow-[0_8px_32px_0_rgba(13,148,136,0.1)];
+}
+
+.glass-card {
+  @apply bg-white/60 backdrop-blur-md border border-white/50 shadow-[0_4px_24px_0_rgba(13,148,136,0.08)] rounded-2xl overflow-hidden;
+}
+
+.btn-primary {
+  @apply bg-brand-primary text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-brand-hover transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0;
+}
+
+.btn-secondary {
+  @apply bg-white/70 backdrop-blur-sm text-brand-primary px-4 py-2 rounded-xl text-sm font-medium border border-brand-border transition-all hover:bg-white/90 shadow-sm hover:shadow;
+}
+
+.input-field {
+  @apply w-full p-2.5 bg-white/50 backdrop-blur-sm border border-brand-border rounded-xl text-sm focus:ring-2 focus:ring-brand-primary/50 outline-none transition-all placeholder:text-brand-text/50 text-brand-text font-medium;
+}
+
+@layer utilities {
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}
+
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+

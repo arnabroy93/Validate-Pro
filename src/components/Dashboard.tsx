@@ -1,0 +1,665 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
+import { useAuth } from '../hooks/useAuth';
+import { supabase, StudentValidation, BatchStudent } from '../../supabase';
+import { toast } from 'react-hot-toast';
+import { 
+  Upload, 
+  FileSpreadsheet, 
+  CheckCircle2, 
+  AlertCircle, 
+  Search, 
+  Filter, 
+  ChevronRight,
+  Database,
+  User,
+  Loader2,
+  Mic,
+  Video
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../utils';
+
+export function Dashboard() {
+  const { user, profile } = useAuth();
+  const [data, setData] = useState<BatchStudent[]>([]);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
+
+  // Filters state
+  const [validatedBy, setValidatedBy] = useState('');
+  const [selectedCenter, setSelectedCenter] = useState('');
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
+
+  // Local validation state
+  // Key: student_code, Value: validation details
+  const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>({});
+
+  useEffect(() => {
+    fetchBatchStudents();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchExistingValidations = async () => {
+      if (!selectedBatch || !selectedCenter) {
+        setValidations({});
+        return;
+      }
+      
+      const studentsInBatch = data.filter(row => 
+        String(row.batch_code) === String(selectedBatch) && 
+        String(row.center_code) === String(selectedCenter) && 
+        String(row.batch_status).toLowerCase() === 'running'
+      );
+      
+      if (studentsInBatch.length === 0) {
+        setValidations({});
+        return;
+      }
+
+      const studentCodes = studentsInBatch.map(s => s.student_code);
+
+      const { data: existingRecords, error } = await supabase
+        .from('student_validations')
+        .select('*')
+        .in('student_code', studentCodes)
+        .eq('batch_code', selectedBatch)
+        .eq('center_code', selectedCenter)
+        .order('created_at', { ascending: true });
+        
+      if (existingRecords && !error) {
+        const loadedValidations: Record<string, Partial<StudentValidation>> = {};
+        existingRecords.forEach(record => {
+          loadedValidations[record.student_code] = {
+            id: record.id,
+            status: record.status as any,
+            remarks: record.remarks,
+            mic_on: record.mic_on,
+            video_on: record.video_on
+          };
+        });
+        setValidations(loadedValidations);
+      }
+    };
+    
+    fetchExistingValidations();
+  }, [selectedBatch, selectedCenter, data]);
+
+  const fetchBatchStudents = async () => {
+    if (!user) return;
+    setFetchingData(true);
+    try {
+      const res = await fetch('/api/batch_data');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to fetch batch data from API');
+      }
+      const allData = await res.json();
+      setData(allData as BatchStudent[]);
+    } catch (error: any) {
+      console.error('Error fetching batch data:', error.message);
+      toast.error('Failed to load batch data');
+    } finally {
+      setFetchingData(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setFileName(file.name);
+    const reader = new FileReader();
+
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const jsonData = XLSX.utils.sheet_to_json<any>(ws);
+        
+        // Normalize headers and values - trim whitespace
+        const normalizedData: BatchStudent[] = jsonData.map(row => {
+          const normalized: any = {};
+          Object.keys(row).forEach(key => {
+            const trimmedKey = key.trim();
+            let value = row[key];
+            if (typeof value === 'string') {
+              value = value.trim();
+            }
+            normalized[trimmedKey] = value;
+          });
+          
+          return {
+            ae_name: normalized['AE Name'] || '',
+            center_code: normalized['Center Code'] || '',
+            batch_code: normalized['Batch Code'] || '',
+            student_code: normalized['Student Code'] || '',
+            student_name: normalized['Student Name'] || '',
+            mobile_no: normalized['Mobile No'] || normalized['Mobile No.'] || '',
+            dob: normalized['DOB'] ? String(normalized['DOB']) : '',
+            father_name: normalized['Father Name'] || '',
+            address: normalized['Address'] || '',
+            batch_status: normalized['Batch Status'] || '',
+            uploaded_by: user?.id
+          };
+        });
+        
+        if (normalizedData.length > 0) {
+          toast.success(`Parsed ${normalizedData.length} records. Deduping...`);
+          
+          // Get existing records for only the batches we are importing to prevent duplicate issues
+          const importedBatchCodes = Array.from(new Set(normalizedData.map(r => r.batch_code).filter(Boolean)));
+          
+          let existingData: any[] = [];
+          
+          // Process in smaller chunks to avoid URL too long issues if there are many batches
+          const chunkSize = 50;
+          for (let i = 0; i < importedBatchCodes.length; i += chunkSize) {
+            const batchChunk = importedBatchCodes.slice(i, i + chunkSize);
+            const { data: bData, error: fetchErr } = await supabase
+              .from('batch_students')
+              .select('student_code, batch_code, center_code')
+              .in('batch_code', batchChunk);
+              
+            if (fetchErr) throw new Error(fetchErr.message);
+            if (bData) {
+               existingData = [...existingData, ...bData];
+            }
+          }
+
+          const existingSet = new Set((existingData || []).map(r => `${r.center_code}_${r.batch_code}_${r.student_code}`));
+
+          const newRecordsToInsert = normalizedData.filter(newRow => {
+            const key = `${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`;
+            return !existingSet.has(key);
+          });
+
+          if (newRecordsToInsert.length === 0) {
+             toast.success('No new records to insert. All data already exists.');
+          } else {
+             const { error } = await supabase.from('batch_students').insert(newRecordsToInsert);
+             if (error) {
+               console.error('Supabase error inserting batch data:', error);
+               throw new Error(error.message);
+             }
+             toast.success(`Successfully added ${newRecordsToInsert.length} new records!`);
+             fetchBatchStudents(); // Refresh data
+          }
+        } else {
+          toast.error("No valid records found in Excel");
+        }
+      } catch (error: any) {
+        toast.error(error.message || 'Error processing Excel file');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const VALIDATED_BY_OPTIONS = [
+    "Arnab Roy",
+    "Biswajit Chakraborty",
+    "Bramha Das",
+    "Karishma Tiwari",
+    "Madhu Soni",
+    "Milan Biswas",
+    "Navamita Talukdar",
+    "Rashmi Mukherjee",
+    "Sirivennela Gaddam",
+    "Susmita Chakraborty",
+    "Susmita Ghosh Dastidar",
+    "Tanmoy Bose",
+    "Ulfath Naaz"
+  ];
+
+  const centerCodes = useMemo(() => {
+    return Array.from(new Set(data.map(row => row.center_code).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+  }, [data]);
+
+  const batchCodes = useMemo(() => {
+    if (!selectedCenter) return [];
+    return Array.from(new Set(
+      data
+        .filter(row => 
+          String(row.center_code) === String(selectedCenter) && 
+          String(row.batch_status).toLowerCase() === 'running'
+        )
+        .map(row => row.batch_code)
+        .filter(Boolean)
+    )).sort((a, b) => String(a).localeCompare(String(b)));
+  }, [data, selectedCenter]);
+
+  const filteredStudents = useMemo(() => {
+    if (!selectedBatch || !selectedCenter) return [];
+    
+    // Deduplicate students by student code (keeping the latest based on order encountered, which is latest created if sorted properly)
+    const studentsMap = new Map();
+    
+    data.filter(row => 
+      String(row.batch_code) === String(selectedBatch) && 
+      String(row.center_code) === String(selectedCenter) && 
+      String(row.batch_status).toLowerCase() === 'running'
+    ).forEach(student => {
+      // If we haven't seen this student yet, or we want the first one encountered (which is the latest created due to backend sort)
+      if (!studentsMap.has(student.student_code)) {
+        studentsMap.set(student.student_code, student);
+      }
+    });
+
+    return Array.from(studentsMap.values());
+  }, [data, selectedBatch, selectedCenter]);
+
+  const searchedStudents = useMemo(() => {
+    if (!studentSearch) return filteredStudents;
+    const lowerSearch = studentSearch.toLowerCase();
+    return filteredStudents.filter(s => 
+      s.student_name.toLowerCase().includes(lowerSearch) || 
+      s.student_code.toLowerCase().includes(lowerSearch)
+    );
+  }, [filteredStudents, studentSearch]);
+
+  const handleValidationChange = (studentCode: string, field: keyof StudentValidation, value: any) => {
+    setValidations(prev => ({
+      ...prev,
+      [studentCode]: {
+        ...prev[studentCode],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
+    if (!validatedBy) {
+      toast.error('Please Select AE Name first');
+      return;
+    }
+
+    // 1. Optimistic update
+    setValidations(prev => ({
+      ...prev,
+      [studentCode]: {
+        ...prev[studentCode],
+        [field]: value
+      }
+    }));
+
+    if (!user) return;
+    
+    // 2. Prepare autosave
+    const student = filteredStudents.find(s => s.student_code === studentCode);
+    if (!student) return;
+
+    // Get current state with the optimistic update
+    const v = { ...(validations[studentCode] || {}), [field]: value };
+
+    const record: any = {
+      student_code: student.student_code,
+      student_name: student.student_name,
+      ae_name: student.ae_name,
+      center_code: student.center_code,
+      batch_code: student.batch_code,
+      dob: student.dob ? String(student.dob) : '',
+      father_name: student.father_name,
+      address: student.address,
+      validated_by: validatedBy,
+      status: v.status || 'Pending',
+      remarks: v.remarks || '',
+      mic_on: v.mic_on || false,
+      video_on: v.video_on || false,
+      user_id: user.id
+    };
+    
+    if (v.id) {
+      record.id = v.id;
+    }
+
+    try {
+      let savedData;
+      let error;
+      
+      if (v.id) {
+        const res = await supabase.from('student_validations').update(record).eq('id', v.id).select().single();
+        savedData = res.data;
+        error = res.error;
+      } else {
+        const res = await supabase.from('student_validations').insert(record).select().single();
+        savedData = res.data;
+        error = res.error;
+      }
+
+      if (!error && savedData) {
+        // If it was newly inserted, update State with specific ID so future updates hit the same row
+        if (v.id !== savedData.id) {
+          setValidations(prev => ({
+            ...prev,
+            [studentCode]: {
+              ...prev[studentCode],
+              id: savedData.id
+            }
+          }));
+        }
+      } else if (error) {
+        console.error('Autosave error:', error);
+      }
+    } catch (e) {
+      console.error('Autosave failed:', e);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedBatch) return;
+    if (!validatedBy) {
+      toast.error('Please Select AE Name first');
+      return;
+    }
+    
+    setLoading(true);
+    if (!user) {
+      toast.error('You must be logged in to submit validations');
+      setLoading(false);
+      return;
+    }
+
+    const recordsToInsert: any[] = [];
+    const recordsToUpdate: any[] = [];
+
+    filteredStudents.forEach(student => {
+      const v = validations[student.student_code] || {};
+      const record: any = {
+        student_code: student.student_code,
+        student_name: student.student_name,
+        ae_name: student.ae_name,
+        center_code: student.center_code,
+        batch_code: student.batch_code,
+        dob: student.dob ? String(student.dob) : '',
+        father_name: student.father_name,
+        address: student.address,
+        validated_by: validatedBy,
+        status: v.status || 'Pending',
+        remarks: v.remarks || '',
+        mic_on: v.mic_on || false,
+        video_on: v.video_on || false,
+        user_id: user.id
+      };
+      
+      if (v.id) {
+        record.id = v.id;
+        recordsToUpdate.push(record);
+      } else {
+        recordsToInsert.push(record);
+      }
+    });
+
+    try {
+      if (recordsToInsert.length > 0) {
+        const { error } = await supabase.from('student_validations').insert(recordsToInsert);
+        if (error) {
+          console.error('Supabase insert error:', error);
+          throw new Error(error.message);
+        }
+      }
+      
+      if (recordsToUpdate.length > 0) {
+        const { error } = await supabase.from('student_validations').upsert(recordsToUpdate);
+        if (error) {
+          console.error('Supabase update error:', error);
+          throw new Error(error.message);
+        }
+      }
+      toast.success('Batch validations submitted successfully!');
+    } catch (error: any) {
+      toast.error(error.message || 'Error submitting data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 bg-transparent">
+      <header className="h-16 glass-panel border-x-0 border-t-0 flex items-center justify-between px-8 z-10 sticky top-0">
+        <h2 className="text-lg font-semibold text-brand-text">Batch Validation Dashboard</h2>
+        <div className="flex items-center gap-4">
+          {profile?.role === 'admin' && (
+            <label className="flex items-center gap-2 btn-secondary cursor-pointer">
+              <Upload className="w-4 h-4" />
+              <span>{fileName || 'Upload Excel'}</span>
+              <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
+            </label>
+          )}
+          <button
+            disabled={loading || !selectedBatch}
+            onClick={handleSubmit}
+            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+            Save Changes
+          </button>
+        </div>
+      </header>
+
+      <div className="p-8 space-y-6 overflow-y-auto">
+        <AnimatePresence>
+          {data.length > 0 && (
+            <motion.div 
+              key="filters-config"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="grid grid-cols-3 gap-6 glass-card p-6"
+            >
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Validated By</label>
+                <select 
+                  value={validatedBy}
+                  onChange={(e) => setValidatedBy(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="" disabled>Please Select AE Name</option>
+                  {VALIDATED_BY_OPTIONS.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Center Code</label>
+                <select 
+                  value={selectedCenter}
+                  onChange={(e) => {
+                    setSelectedCenter(e.target.value);
+                    setSelectedBatch('');
+                  }}
+                  className="input-field"
+                >
+                  <option value="">Choose Center...</option>
+                  {centerCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Batch Code</label>
+                <select 
+                  disabled={!selectedCenter}
+                  value={selectedBatch}
+                  onChange={(e) => setSelectedBatch(e.target.value)}
+                  className="input-field disabled:opacity-50"
+                >
+                  <option value="">Choose Batch...</option>
+                  {batchCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {selectedBatch && filteredStudents.length > 0 && (
+            <motion.div
+              key={`batch-data-${selectedBatch}`}
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="space-y-6"
+            >
+              {/* Student Details Header Banner (Gradient) */}
+              <div className="bg-gradient-to-r from-brand-primary to-emerald-400 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-brand-primary/20 backdrop-blur-md">
+                <div>
+                  <p className="text-xs uppercase opacity-80 font-bold tracking-[0.1em]">Batch Statistics</p>
+                  <h3 className="text-2xl font-black mt-1 tracking-tight">{selectedBatch}</h3>
+                </div>
+                <div className="flex gap-12">
+                  <div className="text-right">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Total Students</p>
+                    <p className="font-bold text-xl">{filteredStudents.length}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Center Code</p>
+                    <p className="font-bold text-xl">{selectedCenter}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider text-nowrap">Status</p>
+                    <p className="font-bold text-xl text-nowrap">Running</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Table */}
+              <div className="glass-card shadow-lg">
+                <div className="px-6 py-4 border-b border-brand-border/50 flex items-center bg-white/40 backdrop-blur-sm">
+                  <div className="relative w-full max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Search by student code or name..."
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 rounded-xl border border-brand-border text-sm outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-white/40 border-b border-brand-border/50 backdrop-blur-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Student Code</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Student Details</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Val</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Re-Val</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Abs</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Rej</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">
+                          <Mic className="w-3.5 h-3.5 mx-auto" />
+                        </th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">
+                          <Video className="w-3.5 h-3.5 mx-auto" />
+                        </th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-divide">
+                      {searchedStudents.map((student, idx) => {
+                        const studentKey = `${student.student_code || 'student'}-${idx}`;
+                        const v = validations[student.student_code] || {};
+                        return (
+                          <tr key={studentKey} className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors backdrop-blur-sm")}>
+                            <td className="px-6 py-4 text-sm font-mono text-brand-primary font-semibold">{student.student_code}</td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-semibold text-brand-text">{student.student_name}</p>
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                  <span className="opacity-60 text-[8px] uppercase">Mob:</span> {student.mobile_no || 'N/A'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                  <span className="opacity-60 text-[8px] uppercase">Father:</span> {student.father_name || 'N/A'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                  <span className="opacity-60 text-[8px] uppercase">DOB:</span> {student.dob ? String(student.dob) : 'N/A'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] flex items-center gap-1" title={student.address}>
+                                  <span className="opacity-60 text-[8px] uppercase">Addr:</span> {student.address || 'N/A'}
+                                </p>
+                              </div>
+                            </td>
+                            {['Validated', 'ReValidated', 'Absent', 'Rejected'].map((status) => (
+                              <td key={status} className="px-4 py-4 text-center">
+                                <input 
+                                  type="checkbox" 
+                                  className="accent-brand-primary w-4 h-4 cursor-pointer rounded"
+                                  checked={v.status === status}
+                                  onChange={() => handleCheckboxChange(student.student_code, 'status', v.status === status ? null : status as any)}
+                                />
+                              </td>
+                            ))}
+                            <td className="px-4 py-4 text-center">
+                              <input 
+                                type="checkbox" 
+                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded"
+                                checked={v.mic_on || false}
+                                onChange={(e) => handleCheckboxChange(student.student_code, 'mic_on', e.target.checked)}
+                              />
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <input 
+                                type="checkbox" 
+                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded"
+                                checked={v.video_on || false}
+                                onChange={(e) => handleCheckboxChange(student.student_code, 'video_on', e.target.checked)}
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={v.remarks || ''}
+                                onChange={(e) => handleValidationChange(student.student_code, 'remarks', e.target.value)}
+                                placeholder="Add comment..."
+                                className="w-full bg-transparent border-b border-transparent focus:border-brand-primary focus:outline-none focus:ring-0 text-sm py-1 transition-all"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="p-4 bg-white/40 border-t border-brand-border/50 flex items-center justify-between text-xs text-brand-text font-medium backdrop-blur-sm">
+                    <p>Showing {searchedStudents.length} of {filteredStudents.length} students.</p>
+                    <div className="flex gap-2">
+                      <button className="px-3 py-1 bg-brand-light border border-brand-border rounded hover:bg-brand-muted transition-colors">Prev</button>
+                      <button className="px-3 py-1 bg-white border border-brand-border rounded font-bold text-brand-hover">1</button>
+                      <button className="px-3 py-1 bg-brand-light border border-brand-border rounded hover:bg-brand-muted transition-colors">Next</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!data.length && !fetchingData && (
+          <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-6">
+            <div className="w-20 h-20 bg-brand-light rounded-3xl flex items-center justify-center text-brand-primary shadow-sm border border-brand-border">
+              <FileSpreadsheet size={40} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-brand-text">Welcome to ValidatePro</h2>
+              <p className="text-slate-500 max-w-xs mx-auto text-sm leading-relaxed">
+                {profile?.role === 'admin' 
+                  ? "Select and upload an Excel data file to populate batch students." 
+                  : "No batch records have been uploaded yet. Please contact your administrator."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!data.length && fetchingData && (
+          <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-6">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+            <p className="text-sm text-slate-500 font-medium">Loading batch records...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
