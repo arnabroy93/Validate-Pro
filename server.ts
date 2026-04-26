@@ -640,6 +640,36 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
   });
 
+  const fetchAllFromSupabase = async (
+    table: string, 
+    select: string, 
+    match?: Record<string, string>
+  ) => {
+    let allData: any[] = [];
+    let from = 0;
+    const limit = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      if (!supabaseAdmin) break;
+      let query = supabaseAdmin.from(table).select(select).range(from, from + limit - 1);
+      if (match) {
+        Object.entries(match).forEach(([k, v]) => {
+          query = query.eq(k, v);
+        });
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += limit;
+        if (data.length < limit) hasMore = false;
+      } else {
+        hasMore = false;
+      }
+    }
+    return allData;
+  };
+
   app.get('/api/filters/options', async (req, res) => {
     try {
       if (!supabaseAdmin) {
@@ -661,24 +691,16 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
 
       // SDK Fallback - using limited selects to stay fast
-      const [cRes, bRes] = await Promise.all([
-        supabaseAdmin
-          .from('batch_students')
-          .select('center_code'),
-        supabaseAdmin
-          .from('batch_students')
-          .select('batch_code, center_code')
-          .eq('batch_status', 'running')
+      const [cData, bData] = await Promise.all([
+        fetchAllFromSupabase('batch_students', 'center_code'),
+        fetchAllFromSupabase('batch_students', 'batch_code, center_code', { batch_status: 'running' })
       ]);
 
-      if (cRes.error) throw cRes.error;
-      if (bRes.error) throw bRes.error;
-
-      const uniqueCenters = Array.from(new Set(cRes.data?.map(c => c.center_code))).filter(Boolean).sort();
+      const uniqueCenters = Array.from(new Set(cData?.map(c => c.center_code))).filter(Boolean).sort();
       
       // Deduplicate batches
       const batchMap = new Map();
-      bRes.data?.forEach(b => {
+      bData?.forEach(b => {
         const key = `${b.batch_code}_${b.center_code}`;
         if (!batchMap.has(key)) {
           batchMap.set(key, b);
@@ -702,15 +724,13 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin client not initialized' });
 
-      const { data, error } = await supabaseAdmin
-        .from('batch_students')
-        .select('*')
-        .eq('center_code', center_code)
-        .eq('batch_code', batch_code)
-        .eq('batch_status', 'running')
-        .order('student_name', { ascending: true });
+      const data = await fetchAllFromSupabase('batch_students', '*', {
+        center_code: String(center_code),
+        batch_code: String(batch_code),
+        batch_status: 'running'
+      });
+      data.sort((a, b) => (a.student_name || '').localeCompare(b.student_name || ''));
 
-      if (error) throw error;
       res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -742,12 +762,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
 
       // Fallback
-      const { data, error } = await supabaseAdmin
-        .from('student_validations')
-        .select('batch_code, validated_by, created_at')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
+      const data = await fetchAllFromSupabase('student_validations', 'batch_code, validated_by, created_at');
 
       const grouped = new Map();
       data?.forEach(v => {
@@ -837,10 +852,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       // For brevity and considering the "fast" requirement, I'll recommend using direct SQL.
       // But if direct SQL is failing due to IPv6, we need a reliable fallback.
       
-      const { data: bData, error: bErr } = await supabaseAdmin.from('batch_students').select('center_code, batch_code, student_code');
-      const { data: vData, error: vErr } = await supabaseAdmin.from('student_validations').select('center_code, batch_code, student_code, status, created_at');
-      
-      if (bErr || vErr) throw bErr || vErr;
+      const [bData, vData] = await Promise.all([
+        fetchAllFromSupabase('batch_students', 'center_code, batch_code, student_code'),
+        fetchAllFromSupabase('student_validations', 'center_code, batch_code, student_code, status, created_at')
+      ]);
 
       // Grouping logic in JS (less efficient than SQL but works as fallback)
       const summaryMap = new Map<string, any>();
@@ -888,26 +903,12 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         return res.status(500).json({ error: 'Supabase client not initialized' });
       }
       
-      const limit = 1000;
-      const pages = [0, 1, 2, 3, 4, 5, 6, 7]; // Up to 8000 records
+      const allData = await fetchAllFromSupabase(
+        'batch_students', 
+        'id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, created_at'
+      );
       
-      const results = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
-          .from('batch_students')
-          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, created_at')
-          .order('created_at', { ascending: false })
-          .range(from, from + limit - 1);
-      }));
-
-      let allData: any[] = [];
-      for (const res of results) {
-        if (res.error) throw res.error;
-        if (res.data) allData = [...allData, ...res.data];
-        if (res.data && res.data.length < limit) break;
-      }
-      
-      // Ensure absolute sorting after parallel fetch combining
+      // Ensure absolute sorting
       allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       res.json(allData);
@@ -921,27 +922,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
       
-      const limit = 1000;
-      const pages = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // Up to 10k validations
-      
-      const results = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
-          .from('student_validations')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .range(from, from + limit - 1);
-      }));
+      const data = await fetchAllFromSupabase('student_validations', '*');
 
-      let allData: any[] = [];
-      for (const res of results) {
-        if (res.error) throw res.error;
-        if (res.data) allData = [...allData, ...res.data];
-        if (res.data && res.data.length < limit) break;
-      }
-
-      allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      res.json(allData);
+      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -956,40 +940,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       
       console.log('[Stats] Using Supabase SDK fallback for batch_stats...');
       
-      const limit = 1000;
-      const pages = [0, 1, 2, 3, 4, 5, 6, 7]; // Up to 8000 records
-      
-      // Fetch Students
-      const studentResults = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
-          .from('batch_students')
-          .select('batch_code, student_code, batch_status')
-          .range(from, from + limit - 1);
-      }));
-
-      let students: any[] = [];
-      for (const res of studentResults) {
-        if (res.error) throw res.error;
-        if (res.data) students = [...students, ...res.data];
-        if (res.data && res.data.length < limit) break;
-      }
-
-      // Fetch Validations
-      const validationResults = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
-          .from('student_validations')
-          .select('batch_code, student_code, status')
-          .range(from, from + limit - 1);
-      }));
-
-      let validations: any[] = [];
-      for (const res of validationResults) {
-        if (res.error) throw res.error;
-        if (res.data) validations = [...validations, ...res.data];
-        if (res.data && res.data.length < limit) break;
-      }
+      const [students, validations] = await Promise.all([
+        fetchAllFromSupabase('batch_students', 'batch_code, student_code, batch_status'),
+        fetchAllFromSupabase('student_validations', 'batch_code, student_code, status')
+      ]);
 
       // Group students by batch
       const batchMap: Record<string, { totalSet: Set<string>, validatedSet: Set<string> }> = {};
