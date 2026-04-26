@@ -284,7 +284,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           batch_code: v.batch_code,
           validated_by: v.validated_by || 'Unknown',
           created_at: v.created_at,
-          validatorSet: new Set(v.validated_by ? [v.validated_by] : [])
+          validatorSet: new Set(v.validated_by ? [v.validated_by] : []),
+          total: 0,
+          validated: 0,
+          pending: 0,
+          status: 'Partial'
         });
       } else {
         const current = grouped.get(v.batch_code);
@@ -750,9 +754,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <td className="px-6 py-5 whitespace-nowrap">
                             <span className={cn(
                               "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm",
-                              v.status === 'Validated' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              v.status === 'ReValidated' ? "bg-blue-50 text-blue-700 border-blue-200" :
-                              v.status === 'Absent' ? "bg-amber-50 text-amber-700 border-amber-200" :
+                              v.status === 'Completed' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                               "bg-rose-50 text-rose-700 border-rose-200"
                             )}>
                               {v.status}
