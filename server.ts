@@ -191,6 +191,8 @@ async function startServer() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const dbUrl = process.env.DATABASE_URL;
+  
+  let preferSdk = false;
 
   if (!supabaseUrl || !serviceRoleKey) {
     console.error('CRITICAL: Supabase environment variables missing (VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)');
@@ -638,6 +640,248 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
   });
 
+  app.get('/api/filters/options', async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        console.error('[Filters] Supabase admin not initialized');
+        return res.status(500).json({ error: 'Supabase admin client not initialized' });
+      }
+      
+      if (globalSql && !preferSdk) {
+        try {
+          const centers = await globalSql`SELECT DISTINCT center_code FROM public.batch_students ORDER BY center_code ASC`;
+          const batches = await globalSql`SELECT DISTINCT batch_code, center_code FROM public.batch_students WHERE LOWER(batch_status) = 'running' ORDER BY batch_code ASC`;
+          return res.json({ centers: centers.map(r => r.center_code), batches: batches });
+        } catch (sqlErr: any) {
+          if (sqlErr.message && (sqlErr.message.includes('ECONNREFUSED') || sqlErr.message.includes('ETIMEDOUT'))) {
+            preferSdk = true;
+          }
+          console.error('[Filters] Postgres query failed, trying SDK:', sqlErr.message);
+        }
+      }
+
+      // SDK Fallback - using limited selects to stay fast
+      const [cRes, bRes] = await Promise.all([
+        supabaseAdmin
+          .from('batch_students')
+          .select('center_code'),
+        supabaseAdmin
+          .from('batch_students')
+          .select('batch_code, center_code')
+          .eq('batch_status', 'running')
+      ]);
+
+      if (cRes.error) throw cRes.error;
+      if (bRes.error) throw bRes.error;
+
+      const uniqueCenters = Array.from(new Set(cRes.data?.map(c => c.center_code))).filter(Boolean).sort();
+      
+      // Deduplicate batches
+      const batchMap = new Map();
+      bRes.data?.forEach(b => {
+        const key = `${b.batch_code}_${b.center_code}`;
+        if (!batchMap.has(key)) {
+          batchMap.set(key, b);
+        }
+      });
+      const uniqueBatches = Array.from(batchMap.values()).sort((a, b) => a.batch_code.localeCompare(b.batch_code));
+
+      res.json({ centers: uniqueCenters, batches: uniqueBatches });
+    } catch (error: any) {
+      console.error('[Filters] Fatal error:', error.message);
+      res.status(500).json({ error: error.message || 'Failed to fetch filters' });
+    }
+  });
+
+  app.get('/api/batch_students/filter', async (req, res) => {
+    const { center_code, batch_code } = req.query;
+    if (!center_code || !batch_code) {
+      return res.status(400).json({ error: 'center_code and batch_code are required' });
+    }
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin client not initialized' });
+
+      const { data, error } = await supabaseAdmin
+        .from('batch_students')
+        .select('*')
+        .eq('center_code', center_code)
+        .eq('batch_code', batch_code)
+        .eq('batch_status', 'running')
+        .order('student_name', { ascending: true });
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/admin/batch_activity', async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin client not initialized' });
+
+      if (globalSql && !preferSdk) {
+        try {
+          const activity = await globalSql`
+            SELECT 
+              v.batch_code,
+              string_agg(DISTINCT v.validated_by, ', ') as validated_by,
+              MAX(v.created_at) as created_at
+            FROM public.student_validations v
+            GROUP BY v.batch_code
+            ORDER BY created_at DESC
+          `;
+          return res.json(activity);
+        } catch (sqlErr: any) {
+          if (sqlErr.message && (sqlErr.message.includes('ECONNREFUSED') || sqlErr.message.includes('ETIMEDOUT'))) {
+            preferSdk = true;
+          }
+          console.warn('[Activity] Postgres failed, trying SDK:', sqlErr.message);
+        }
+      }
+
+      // Fallback
+      const { data, error } = await supabaseAdmin
+        .from('student_validations')
+        .select('batch_code, validated_by, created_at')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+
+      const grouped = new Map();
+      data?.forEach(v => {
+        if (!grouped.has(v.batch_code)) {
+          grouped.set(v.batch_code, { 
+            batch_code: v.batch_code, 
+            validated_by_set: new Set(v.validated_by ? [v.validated_by] : []),
+            created_at: v.created_at 
+          });
+        } else {
+          const g = grouped.get(v.batch_code);
+          if (v.validated_by) g.validated_by_set.add(v.validated_by);
+          if (new Date(v.created_at) > new Date(g.created_at)) g.created_at = v.created_at;
+        }
+      });
+
+      const result = Array.from(grouped.values()).map(g => ({
+        batch_code: g.batch_code,
+        validated_by: Array.from(g.validated_by_set).join(', '),
+        created_at: g.created_at
+      }));
+
+      res.json(result.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/reports/batch_summary', async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin client not initialized' });
+
+      if (globalSql && !preferSdk) {
+        // Optimized heavy lift using raw SQL
+        try {
+          const summary = await globalSql`
+            WITH student_counts AS (
+              SELECT 
+                center_code, 
+                batch_code, 
+                COUNT(DISTINCT student_code) as total_students,
+                MAX(created_at) as latest_batch_time
+              FROM public.batch_students
+              GROUP BY center_code, batch_code
+            ),
+            validation_counts AS (
+              SELECT 
+                center_code, 
+                batch_code,
+                COUNT(CASE WHEN LOWER(status) = 'validated' THEN 1 END) as validated,
+                COUNT(CASE WHEN LOWER(status) = 'revalidated' THEN 1 END) as revalidated,
+                COUNT(CASE WHEN LOWER(status) = 'absent' THEN 1 END) as absent,
+                COUNT(CASE WHEN LOWER(status) = 'rejected' THEN 1 END) as rejected,
+                MAX(created_at) as latest_val_time
+              FROM public.student_validations
+              GROUP BY center_code, batch_code
+            )
+            SELECT 
+              s.center_code,
+              s.batch_code,
+              s.total_students::int,
+              COALESCE(v.validated, 0)::int as validated,
+              COALESCE(v.revalidated, 0)::int as revalidated,
+              COALESCE(v.absent, 0)::int as absent,
+              COALESCE(v.rejected, 0)::int as rejected,
+              GREATEST(s.latest_batch_time, v.latest_val_time) as latest_timestamp
+            FROM student_counts s
+            LEFT JOIN validation_counts v ON s.center_code = v.center_code AND s.batch_code = v.batch_code
+            ORDER BY latest_timestamp DESC NULLS LAST
+          `;
+          
+          const finalSummary = summary.map(s => ({
+            ...s,
+            pending: Math.max(0, s.total_students - (s.validated + s.revalidated + s.absent + s.rejected))
+          }));
+          
+          return res.json(finalSummary);
+        } catch (sqlErr: any) {
+          if (sqlErr.message && (sqlErr.message.includes('ECONNREFUSED') || sqlErr.message.includes('ETIMEDOUT'))) {
+            preferSdk = true;
+          }
+          console.warn('[Summary] Postgres failed, trying SDK:', sqlErr.message);
+        }
+      }
+
+      // Fallback: If no direct SQL, we might need a more complex SDK approach or simplified version
+      // For brevity and considering the "fast" requirement, I'll recommend using direct SQL.
+      // But if direct SQL is failing due to IPv6, we need a reliable fallback.
+      
+      const { data: bData, error: bErr } = await supabaseAdmin.from('batch_students').select('center_code, batch_code, student_code');
+      const { data: vData, error: vErr } = await supabaseAdmin.from('student_validations').select('center_code, batch_code, student_code, status, created_at');
+      
+      if (bErr || vErr) throw bErr || vErr;
+
+      // Grouping logic in JS (less efficient than SQL but works as fallback)
+      const summaryMap = new Map<string, any>();
+      
+      bData?.forEach(s => {
+        const key = `${s.center_code}_${s.batch_code}`;
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, { center_code: s.center_code, batch_code: s.batch_code, total_set: new Set(), validated: 0, revalidated: 0, absent: 0, rejected: 0, latest_timestamp: null });
+        }
+        summaryMap.get(key).total_set.add(s.student_code);
+      });
+
+      vData?.forEach(v => {
+        const key = `${v.center_code}_${v.batch_code}`;
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, { center_code: v.center_code, batch_code: v.batch_code, total_set: new Set(), validated: 0, revalidated: 0, absent: 0, rejected: 0, latest_timestamp: v.created_at });
+        }
+        const s = summaryMap.get(key);
+        const status = (v.status || '').toLowerCase();
+        if (status === 'validated') s.validated++;
+        else if (status === 'revalidated') s.revalidated++;
+        else if (status === 'absent') s.absent++;
+        else if (status === 'rejected') s.rejected++;
+        
+        if (!s.latest_timestamp || new Date(v.created_at) > new Date(s.latest_timestamp)) {
+          s.latest_timestamp = v.created_at;
+        }
+      });
+
+      const result = Array.from(summaryMap.values()).map(s => ({
+        ...s,
+        total_students: s.total_set.size,
+        pending: Math.max(0, s.total_set.size - (s.validated + s.revalidated + s.absent + s.rejected))
+      }));
+
+      res.json(result.sort((a, b) => new Date(b.latest_timestamp).getTime() - new Date(a.latest_timestamp).getTime()));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get('/api/batch_data', async (req, res) => {
     try {
       if (!supabaseAdmin) {
@@ -786,12 +1030,12 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       return stats;
     };
 
-    if (!globalSql) {
+    if (!globalSql || preferSdk) {
       try {
         const stats = await fallbackStats();
         return res.json(stats);
       } catch (err: any) {
-        return res.status(500).json({ error: 'DATABASE_URL is not configured and fallback failed: ' + err.message });
+        return res.status(500).json({ error: 'Postgres disabled/failed and fallback failed: ' + err.message });
       }
     }
     
@@ -839,7 +1083,8 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         error.message.includes('ECONNRESET') ||
         error.message.includes('ETIMEDOUT')
       )) {
-        console.warn(`[Stats] Postgres direct connection failed (${error.message}). Falling back to SDK.`);
+        console.warn(`[Stats] Postgres direct connection failed (${error.message}). Marking preferSdk = true.`);
+        preferSdk = true;
         try {
           const stats = await fallbackStats();
           return res.json(stats);

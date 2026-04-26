@@ -23,6 +23,7 @@ import { cn } from '../utils';
 export function Dashboard() {
   const { user, profile } = useAuth();
   const [data, setData] = useState<BatchStudent[]>([]);
+  const [filterOptions, setFilterOptions] = useState<{ centers: string[], batches: { batch_code: string, center_code: string }[] }>({ centers: [], batches: [] });
   const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
@@ -38,12 +39,20 @@ export function Dashboard() {
   const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>({});
 
   useEffect(() => {
-    fetchBatchStudents();
+    fetchFilterOptions();
   }, [user]);
 
   useEffect(() => {
+    if (selectedBatch && selectedCenter) {
+      fetchBatchStudents(selectedCenter, selectedBatch);
+    } else {
+      setData([]);
+    }
+  }, [selectedBatch, selectedCenter]);
+
+  useEffect(() => {
     const fetchExistingValidations = async () => {
-      if (!selectedBatch || !selectedCenter) {
+      if (!selectedBatch || !selectedCenter || data.length === 0) {
         setValidations({});
         return;
       }
@@ -87,20 +96,32 @@ export function Dashboard() {
     fetchExistingValidations();
   }, [selectedBatch, selectedCenter, data]);
 
-  const fetchBatchStudents = async () => {
+  const fetchFilterOptions = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch('/api/filters/options');
+      if (!res.ok) throw new Error('Failed to fetch filter options');
+      const options = await res.json();
+      setFilterOptions(options);
+    } catch (e) {
+      console.error('Error fetching filters:', e);
+    }
+  };
+
+  const fetchBatchStudents = async (center: string, batch: string) => {
     if (!user) return;
     setFetchingData(true);
     try {
-      const res = await fetch('/api/batch_data');
+      const res = await fetch(`/api/batch_students/filter?center_code=${encodeURIComponent(center)}&batch_code=${encodeURIComponent(batch)}`);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to fetch batch data from API');
       }
-      const allData = await res.json();
-      setData(allData as BatchStudent[]);
+      const batchData = await res.json();
+      setData(batchData as BatchStudent[]);
     } catch (error: any) {
       console.error('Error fetching batch data:', error.message);
-      toast.error('Failed to load batch data');
+      toast.error('Failed to load students for this batch');
     } finally {
       setFetchingData(false);
     }
@@ -188,7 +209,7 @@ export function Dashboard() {
                throw new Error(error.message);
              }
              toast.success(`Successfully added ${newRecordsToInsert.length} new records!`);
-             fetchBatchStudents(); // Refresh data
+             fetchFilterOptions(); // Refresh filters
           }
         } else {
           toast.error("No valid records found in Excel");
@@ -220,21 +241,15 @@ export function Dashboard() {
   ];
 
   const centerCodes = useMemo(() => {
-    return Array.from(new Set(data.map(row => row.center_code).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [data]);
+    return filterOptions.centers;
+  }, [filterOptions]);
 
   const batchCodes = useMemo(() => {
     if (!selectedCenter) return [];
-    return Array.from(new Set(
-      data
-        .filter(row => 
-          String(row.center_code) === String(selectedCenter) && 
-          String(row.batch_status).toLowerCase() === 'running'
-        )
-        .map(row => row.batch_code)
-        .filter(Boolean)
-    )).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [data, selectedCenter]);
+    return filterOptions.batches
+      .filter(b => b.center_code === selectedCenter)
+      .map(b => b.batch_code);
+  }, [filterOptions, selectedCenter]);
 
   const filteredStudents = useMemo(() => {
     if (!selectedBatch || !selectedCenter) return [];

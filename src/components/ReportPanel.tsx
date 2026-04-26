@@ -43,105 +43,21 @@ export function ReportPanel() {
     fetchData();
   }, []);
 
-  const fetchAllTableData = async (tableName: string) => {
-    let allData: any[] = [];
-    let from = 0;
-    let limit = 1000;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(from, from + limit - 1);
-      
-      if (error) throw error;
-      if (data && data.length > 0) {
-        allData = [...allData, ...data];
-        from += limit;
-        if (data.length < limit) hasMore = false;
-      } else {
-        hasMore = false;
-      }
-    }
-    return allData;
-  };
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vData, bData] = await Promise.all([
-        fetchAllTableData('student_validations'),
-        fetchAllTableData('batch_students')
+      const [summaryRes, allValsRes] = await Promise.all([
+        fetch('/api/reports/batch_summary'),
+        fetch('/api/admin/all_validations') // Still need validations for the "View Details" view
       ]);
       
+      if (!summaryRes.ok) throw new Error('Failed to fetch summary');
+      const summary = await summaryRes.json();
       
-      // 1. Deduplicate batch students from excel
-      const uniqueStudentsMap = new Map<string, any>();
-      bData.forEach(s => {
-        const key = `${s.center_code}_${s.batch_code}_${s.student_code}`;
-        // Since we ordered desc by created_at, the first one encountered is the latest
-        if (!uniqueStudentsMap.has(key)) {
-          uniqueStudentsMap.set(key, s);
-        }
-      });
-
-      // 2. Build full combined validation data for "View Details"
-      const combinedValidations: any[] = [];
+      const vData = allValsRes.ok ? await allValsRes.json() : [];
       
-      // Calculate Summary
-      const summaryMap = new Map<string, BatchSummary>();
-      
-      uniqueStudentsMap.forEach(student => {
-        const sumKey = `${student.center_code}_${student.batch_code}`;
-        if (!summaryMap.has(sumKey)) {
-          summaryMap.set(sumKey, {
-            center_code: student.center_code || '',
-            batch_code: student.batch_code || '',
-            total_students: 0,
-            validated: 0,
-            revalidated: 0,
-            pending: 0,
-            absent: 0,
-            rejected: 0,
-            latest_timestamp: student.created_at || ''
-          });
-        }
-        
-        const summary = summaryMap.get(sumKey)!;
-        summary.total_students += 1;
-        
-        const validationRow = vData.find(v => v.batch_code === student.batch_code && v.student_code === student.student_code);
-        
-        const currentStatus = validationRow?.status || 'Pending';
-        
-        if (currentStatus === 'Validated') summary.validated += 1;
-        else if (currentStatus === 'ReValidated') summary.revalidated += 1;
-        else if (currentStatus === 'Absent') summary.absent += 1;
-        else if (currentStatus === 'Rejected') summary.rejected += 1;
-        else summary.pending += 1; // Default to Pending
-        
-        if (validationRow?.created_at && new Date(validationRow.created_at) > new Date(summary.latest_timestamp)) {
-            summary.latest_timestamp = validationRow.created_at;
-        }
-
-        combinedValidations.push({
-            id: validationRow?.id || `pending-${student.student_code}`,
-            student_code: student.student_code,
-            student_name: student.student_name,
-            center_code: student.center_code,
-            batch_code: student.batch_code,
-            validated_by: validationRow?.validated_by || 'N/A',
-            status: currentStatus,
-            remarks: validationRow?.remarks || '',
-            mic_on: validationRow?.mic_on || false,
-            video_on: validationRow?.video_on || false,
-            created_at: validationRow?.created_at || student.created_at
-        });
-      });
-      
-      setValidations(combinedValidations);
-      setSummaryData(Array.from(summaryMap.values()).sort((a, b) => new Date(b.latest_timestamp).getTime() - new Date(a.latest_timestamp).getTime()));
+      setValidations(vData);
+      setSummaryData(summary);
 
     } catch (error: any) {
       toast.error('Error fetching data');
