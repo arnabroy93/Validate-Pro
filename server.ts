@@ -747,16 +747,31 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       return stats;
     };
 
-    if (!dbUrl) {
+    if (!dbUrl || dbUrl.includes('your-database-url')) {
       try {
         const stats = await fallbackStats();
         return res.json(stats);
       } catch (err: any) {
-        return res.status(500).json({ error: 'DATABASE_URL not found and fallback failed: ' + err.message });
+        return res.status(500).json({ error: 'DATABASE_URL is not configured and fallback failed: ' + err.message });
       }
     }
     
-    const sql = postgres(dbUrl, { ssl: 'require', connect_timeout: 10 });
+    // Validate that it looks like a postgres URL
+    if (!dbUrl.startsWith('postgres://') && !dbUrl.startsWith('postgresql://')) {
+      console.warn('[Stats] Invalid DATABASE_URL format. Falling back to SDK.');
+      try {
+        const stats = await fallbackStats();
+        return res.json(stats);
+      } catch (err: any) {
+        return res.status(500).json({ error: 'Invalid DATABASE_URL and fallback failed.' });
+      }
+    }
+    
+    const sql = postgres(dbUrl, { 
+      ssl: 'require', 
+      connect_timeout: 15,
+      max: 1 // Limit connections for this stats check
+    });
     try {
       // Use raw SQL for lightning fast aggregation
       const [students, validations] = await Promise.all([
