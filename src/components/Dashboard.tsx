@@ -122,29 +122,29 @@ export function Dashboard() {
         const ws = wb.Sheets[wsname];
         const jsonData = XLSX.utils.sheet_to_json<any>(ws);
         
-        // Normalize headers and values - trim whitespace
+        // Normalize headers and values - remove spaces/special chars and lowercase
         const normalizedData: BatchStudent[] = jsonData.map(row => {
           const normalized: any = {};
           Object.keys(row).forEach(key => {
-            const trimmedKey = key.trim();
+            const cleanKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
             let value = row[key];
             if (typeof value === 'string') {
               value = value.trim();
             }
-            normalized[trimmedKey] = value;
+            normalized[cleanKey] = value;
           });
           
           return {
-            ae_name: normalized['AE Name'] || '',
-            center_code: normalized['Center Code'] || '',
-            batch_code: normalized['Batch Code'] || '',
-            student_code: normalized['Student Code'] || '',
-            student_name: normalized['Student Name'] || '',
-            mobile_no: normalized['Mobile No'] || normalized['Mobile No.'] || '',
-            dob: normalized['DOB'] ? String(normalized['DOB']) : '',
-            father_name: normalized['Father Name'] || '',
-            address: normalized['Address'] || '',
-            batch_status: normalized['Batch Status'] || '',
+            ae_name: normalized['aename'] || '',
+            center_code: normalized['centercode'] || '',
+            batch_code: normalized['batchcode'] || '',
+            student_code: normalized['studentcode'] || '',
+            student_name: normalized['studentname'] || '',
+            mobile_no: normalized['mobileno'] || '',
+            dob: normalized['dob'] ? String(normalized['dob']) : '',
+            father_name: normalized['fathername'] || '',
+            address: normalized['address'] || '',
+            batch_status: normalized['batchstatus'] || '',
             uploaded_by: user?.id
           };
         });
@@ -222,7 +222,6 @@ export function Dashboard() {
   const centerCodes = useMemo(() => {
     return Array.from(new Set(
       data
-        .filter(row => String(row.batch_status).trim().toLowerCase() === 'running')
         .map(row => row.center_code)
         .filter(Boolean)
     )).sort((a, b) => String(a).localeCompare(String(b)));
@@ -233,7 +232,7 @@ export function Dashboard() {
     return Array.from(new Set(
       data
         .filter(row => 
-          String(row.center_code) === String(selectedCenter) && 
+          String(row.center_code).trim() === String(selectedCenter).trim() && 
           String(row.batch_status).trim().toLowerCase() === 'running'
         )
         .map(row => row.batch_code)
@@ -248,8 +247,8 @@ export function Dashboard() {
     const studentsMap = new Map();
     
     data.filter(row => 
-      String(row.batch_code) === String(selectedBatch) && 
-      String(row.center_code) === String(selectedCenter) && 
+      String(row.batch_code).trim() === String(selectedBatch).trim() && 
+      String(row.center_code).trim() === String(selectedCenter).trim() && 
       String(row.batch_status).trim().toLowerCase() === 'running'
     ).forEach(student => {
       // If we haven't seen this student yet, or we want the first one encountered (which is the latest created due to backend sort)
