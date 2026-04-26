@@ -727,7 +727,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       const batchMap: Record<string, { totalSet: Set<string>, validatedSet: Set<string> }> = {};
       
       students?.forEach((row: any) => {
-        if ((row.batch_status || '').toLowerCase() === 'running') {
+        if ((row.batch_status || '').trim().toLowerCase() === 'running') {
           if (!batchMap[row.batch_code]) {
             batchMap[row.batch_code] = { totalSet: new Set(), validatedSet: new Set() };
           }
@@ -777,7 +777,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         globalSql`
           SELECT batch_code, count(DISTINCT student_code)::int as total 
           FROM public.batch_students 
-          WHERE LOWER(batch_status) = 'running' 
+          WHERE LOWER(TRIM(batch_status)) = 'running' 
           GROUP BY batch_code
         `,
         globalSql`

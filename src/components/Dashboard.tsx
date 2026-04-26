@@ -220,7 +220,12 @@ export function Dashboard() {
   ];
 
   const centerCodes = useMemo(() => {
-    return Array.from(new Set(data.map(row => row.center_code).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+    return Array.from(new Set(
+      data
+        .filter(row => String(row.batch_status).trim().toLowerCase() === 'running')
+        .map(row => row.center_code)
+        .filter(Boolean)
+    )).sort((a, b) => String(a).localeCompare(String(b)));
   }, [data]);
 
   const batchCodes = useMemo(() => {
@@ -229,7 +234,7 @@ export function Dashboard() {
       data
         .filter(row => 
           String(row.center_code) === String(selectedCenter) && 
-          String(row.batch_status).toLowerCase() === 'running'
+          String(row.batch_status).trim().toLowerCase() === 'running'
         )
         .map(row => row.batch_code)
         .filter(Boolean)
@@ -245,7 +250,7 @@ export function Dashboard() {
     data.filter(row => 
       String(row.batch_code) === String(selectedBatch) && 
       String(row.center_code) === String(selectedCenter) && 
-      String(row.batch_status).toLowerCase() === 'running'
+      String(row.batch_status).trim().toLowerCase() === 'running'
     ).forEach(student => {
       // If we haven't seen this student yet, or we want the first one encountered (which is the latest created due to backend sort)
       if (!studentsMap.has(student.student_code)) {
