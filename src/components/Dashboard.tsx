@@ -203,13 +203,24 @@ export function Dashboard() {
           if (newRecordsToInsert.length === 0) {
              toast.success('No new records to insert. All data already exists.');
           } else {
-             const { error } = await supabase.from('batch_students').insert(newRecordsToInsert);
-             if (error) {
-               console.error('Supabase error inserting batch data:', error);
-               throw new Error(error.message);
+             // Insert in chunks to avoid Payload Too Large errors
+             const insertChunkSize = 500;
+             for (let i = 0; i < newRecordsToInsert.length; i += insertChunkSize) {
+               const chunk = newRecordsToInsert.slice(i, i + insertChunkSize);
+               const { error } = await supabase.from('batch_students').insert(chunk);
+               if (error) {
+                 console.error('Supabase error inserting batch data:', error);
+                 throw new Error(error.message);
+               }
              }
              toast.success(`Successfully added ${newRecordsToInsert.length} new records!`);
              fetchFilterOptions(); // Refresh filters
+             if (selectedCenter && selectedBatch) {
+               fetchBatchStudents(selectedCenter, selectedBatch);
+             } else if (newRecordsToInsert.length > 0) {
+               setSelectedCenter(newRecordsToInsert[0].center_code);
+               setSelectedBatch(newRecordsToInsert[0].batch_code);
+             }
           }
         } else {
           toast.error("No valid records found in Excel");
@@ -219,6 +230,8 @@ export function Dashboard() {
         console.error(error);
       } finally {
         setLoading(false);
+        // Reset the file input so the same file could be uploaded again
+        if (e.target) { e.target.value = ''; }
       }
     };
     reader.readAsBinaryString(file);
