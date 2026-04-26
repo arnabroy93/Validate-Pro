@@ -70,19 +70,31 @@ export function ReportPanel() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vData, bData] = await Promise.all([
-        fetchAllTableData('student_validations'),
-        fetchAllTableData('batch_students')
+      const [vDataRes, bDataRes] = await Promise.all([
+        fetch('/api/admin/all_validations'),
+        fetch('/api/batch_data')
       ]);
+      
+      const vData = vDataRes.ok ? await vDataRes.json() : await fetchAllTableData('student_validations');
+      const bData = bDataRes.ok ? await bDataRes.json() : await fetchAllTableData('batch_students');
       
       
       // 1. Deduplicate batch students from excel
       const uniqueStudentsMap = new Map<string, any>();
-      bData.forEach(s => {
+      bData.forEach((s: any) => {
         const key = `${s.center_code}_${s.batch_code}_${s.student_code}`;
         // Since we ordered desc by created_at, the first one encountered is the latest
         if (!uniqueStudentsMap.has(key)) {
           uniqueStudentsMap.set(key, s);
+        }
+      });
+      
+      const vDataMap = new Map<string, any>();
+      vData.forEach((v: any) => {
+        const key = `${v.batch_code}_${v.student_code}`;
+        // Prioritize latest validation (already ordered desc in API)
+        if (!vDataMap.has(key)) {
+          vDataMap.set(key, v);
         }
       });
 
@@ -92,7 +104,7 @@ export function ReportPanel() {
       // Calculate Summary
       const summaryMap = new Map<string, BatchSummary>();
       
-      uniqueStudentsMap.forEach(student => {
+      uniqueStudentsMap.forEach((student: any) => {
         const sumKey = `${student.center_code}_${student.batch_code}`;
         if (!summaryMap.has(sumKey)) {
           summaryMap.set(sumKey, {
@@ -111,11 +123,11 @@ export function ReportPanel() {
         const summary = summaryMap.get(sumKey)!;
         summary.total_students += 1;
         
-        const validationRow = vData.find(v => v.batch_code === student.batch_code && v.student_code === student.student_code);
+        const validationRow = vDataMap.get(`${student.batch_code}_${student.student_code}`);
         
         const currentStatus = validationRow?.status || 'Pending';
         
-        if (currentStatus === 'Validated') summary.validated += 1;
+        if (currentStatus === 'Validated' || currentStatus === 'Completed') summary.validated += 1;
         else if (currentStatus === 'ReValidated') summary.revalidated += 1;
         else if (currentStatus === 'Absent') summary.absent += 1;
         else if (currentStatus === 'Rejected') summary.rejected += 1;
@@ -141,7 +153,7 @@ export function ReportPanel() {
       });
       
       setValidations(combinedValidations);
-      setSummaryData(Array.from(summaryMap.values()).sort((a, b) => new Date(b.latest_timestamp).getTime() - new Date(a.latest_timestamp).getTime()));
+      setSummaryData(Array.from(summaryMap.values()).sort((a, b) => new Date(b.latest_timestamp || 0).getTime() - new Date(a.latest_timestamp || 0).getTime()));
 
     } catch (error: any) {
       toast.error('Error fetching data');

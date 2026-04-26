@@ -755,6 +755,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             <span className={cn(
                               "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm",
                               v.status === 'Completed' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                              v.status === 'Partial' ? "bg-amber-50 text-amber-700 border-amber-200" :
                               "bg-rose-50 text-rose-700 border-rose-200"
                             )}>
                               {v.status}
