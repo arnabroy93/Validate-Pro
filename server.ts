@@ -654,7 +654,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       let query = supabaseAdmin.from(table).select(select).range(from, from + limit - 1);
       if (match) {
         Object.entries(match).forEach(([k, v]) => {
-          query = query.eq(k, v);
+          query = query.ilike(k, v);
         });
       }
       const { data, error } = await query;

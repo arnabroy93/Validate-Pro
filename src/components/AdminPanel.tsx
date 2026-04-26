@@ -60,7 +60,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     try {
       const res = await fetch('/api/admin/db-check');
       const data = await res.json();
-      setDbStatus(data);
+      console.log('DbStatus:', data);
+      setDbStatus({ ...data }); 
     } catch (e) {
       console.error('DB check failed', e);
     }
