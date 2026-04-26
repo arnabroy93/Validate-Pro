@@ -53,6 +53,7 @@ export function ReportPanel() {
         .from(tableName)
         .select('*')
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, from + limit - 1);
       
       if (error) throw error;

@@ -651,6 +651,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           .from('batch_students')
           .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, created_at')
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(from, from + limit - 1);
       }));
 
@@ -662,7 +663,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
       
       // Ensure absolute sorting after parallel fetch combining
-      allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      allData.sort((a, b) => {
+        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return (b.id || 0) - (a.id || 0); // fallback to id desc
+      });
       
       res.json(allData);
     } catch (error: any) {
@@ -684,6 +689,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           .from('student_validations')
           .select('*')
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(from, from + limit - 1);
       }));
 
@@ -694,7 +700,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         if (res.data && res.data.length < limit) break;
       }
 
-      allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      allData.sort((a, b) => {
+        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return (b.id || 0) - (a.id || 0);
+      });
       res.json(allData);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

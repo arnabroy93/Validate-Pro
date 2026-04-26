@@ -72,9 +72,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     let limit = 1000;
     let hasMore = true;
     while (hasMore) {
-      const query = supabase.from(tableName).select('*');
+      let query = supabase.from(tableName).select('*');
       if (tableName === 'student_validations') {
-         query.order('created_at', { ascending: false });
+         query = query.order('created_at', { ascending: false }).order('id', { ascending: false });
+      } else {
+         query = query.order('id', { ascending: false });
       }
       const { data, error } = await query.range(from, from + limit - 1);
       
