@@ -193,10 +193,22 @@ async function startServer() {
   // Supabase Admin Client
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const dbUrl = process.env.DATABASE_URL;
 
   if (!supabaseUrl || !serviceRoleKey) {
     console.error('CRITICAL: Supabase environment variables missing (VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)');
   }
+
+  // Global Postgres Pool (Singleton)
+  // We initialize this once to avoid "Too many connections" errors upon rapid refresh
+  const globalSql = (dbUrl && !dbUrl.includes('your-database-url') && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')))
+    ? postgres(dbUrl, { 
+        ssl: 'require', 
+        max: 5, // Small pool for stability
+        idle_timeout: 20,
+        connect_timeout: 10
+      })
+    : null;
 
   const supabaseAdmin = (supabaseUrl && serviceRoleKey) 
     ? createClient(supabaseUrl, serviceRoleKey, {
@@ -210,12 +222,10 @@ async function startServer() {
   app.use(express.json());
 
   app.post('/api/admin/refresh-schema', async (req, res) => {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) return res.status(500).json({ error: 'DATABASE_URL not found' });
+    if (!globalSql) return res.status(503).json({ error: 'Postgres direct connection not configured or unavailable' });
     
-    const sql = postgres(dbUrl, { ssl: 'require' });
     try {
-      await sql`NOTIFY pgrst, 'reload schema';`;
+      await globalSql`NOTIFY pgrst, 'reload schema';`;
       res.json({ message: 'Success: Schema reload signal sent to PostgREST' });
     } catch (err: any) {
       if (err.message && err.message.includes('authentication')) {
@@ -223,8 +233,6 @@ async function startServer() {
       } else {
         res.status(500).json({ error: err.message });
       }
-    } finally {
-      await sql.end();
     }
   });
 
@@ -573,14 +581,12 @@ async function startServer() {
       }
 
       // 2. Test Direct Postgres
-      const dbUrl = process.env.DATABASE_URL;
-      if (!dbUrl) {
-        dbReport.postgresDirect = 'missing_env_var';
+      if (!globalSql) {
+        dbReport.postgresDirect = 'missing_env_var_or_failed';
         dbReport.healthy = false;
       } else {
-        const sql = postgres(dbUrl, { ssl: 'require', connect_timeout: 5 });
         try {
-          await sql`SELECT 1`;
+          await globalSql`SELECT 1`;
           dbReport.postgresDirect = 'working';
         } catch (pgErr: any) {
           dbReport.postgresDirect = 'failed';
@@ -591,8 +597,6 @@ async function startServer() {
           } else {
             dbReport.details.push(`Postgres Connection Error: ${pgErr.message}`);
           }
-        } finally {
-          await sql.end();
         }
       }
 
@@ -747,7 +751,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       return stats;
     };
 
-    if (!dbUrl || dbUrl.includes('your-database-url')) {
+    if (!globalSql) {
       try {
         const stats = await fallbackStats();
         return res.json(stats);
@@ -756,32 +760,16 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
     }
     
-    // Validate that it looks like a postgres URL
-    if (!dbUrl.startsWith('postgres://') && !dbUrl.startsWith('postgresql://')) {
-      console.warn('[Stats] Invalid DATABASE_URL format. Falling back to SDK.');
-      try {
-        const stats = await fallbackStats();
-        return res.json(stats);
-      } catch (err: any) {
-        return res.status(500).json({ error: 'Invalid DATABASE_URL and fallback failed.' });
-      }
-    }
-    
-    const sql = postgres(dbUrl, { 
-      ssl: 'require', 
-      connect_timeout: 15,
-      max: 1 // Limit connections for this stats check
-    });
     try {
       // Use raw SQL for lightning fast aggregation
       const [students, validations] = await Promise.all([
-        sql`
+        globalSql`
           SELECT batch_code, count(*)::int as total 
           FROM public.batch_students 
           WHERE batch_status = 'running' 
           GROUP BY batch_code
         `,
-        sql`
+        globalSql`
           SELECT batch_code, count(*)::int as validated
           FROM public.student_validations 
           WHERE status IN ('Validated', 'ReValidated')
@@ -818,10 +806,6 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
       
       res.status(500).json({ error: error.message || 'Failed to fetch batch stats' });
-    } finally {
-      try {
-        await sql.end();
-      } catch (e) {}
     }
   });
 

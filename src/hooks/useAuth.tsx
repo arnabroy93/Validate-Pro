@@ -17,20 +17,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
         setUser(session?.user ?? null);
-        if (session?.user) fetchProfile(session.user.id, session.user);
-        else setLoading(false);
-      })
-      .catch((error) => {
+        if (session?.user) {
+          await fetchProfile(session.user.id, session.user);
+        } else {
+          setLoading(false);
+        }
+      } catch (error: any) {
         console.error('Auth Session Error:', error);
+        
+        if (retryCount < maxRetries && !error.message.includes('Refresh Token Not Found')) {
+          retryCount++;
+          console.log(`Retrying auth initialization (${retryCount}/${maxRetries})...`);
+          setTimeout(initializeAuth, 1000 * retryCount);
+          return;
+        }
+
         if (error.message.includes('Refresh Token Not Found') || error.message.includes('Invalid Refresh Token')) {
           supabase.auth.signOut();
         }
         setLoading(false);
-      });
+      }
+    };
+
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
