@@ -275,28 +275,56 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
 
   const batchActivityData = React.useMemo(() => {
     const grouped = new Map<string, any>();
+    
+    // First, initialize from allValidations to collect validated_by and latest created_at
     allValidations.forEach(v => {
       if (!grouped.has(v.batch_code)) {
-        const bs = batchStats[v.batch_code] || { total: 0, validated: 0, pending: 0 };
-        const status = bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial";
         grouped.set(v.batch_code, {
           id: v.batch_code,
           batch_code: v.batch_code,
-          status: status,
-          total: bs.total,
-          validated: bs.validated,
-          pending: bs.pending,
-          validated_by: v.validated_by,
+          validated_by: v.validated_by || 'Unknown',
           created_at: v.created_at,
+          validatorSet: new Set(v.validated_by ? [v.validated_by] : [])
         });
       } else {
         const current = grouped.get(v.batch_code);
-        if (v.validated_by && current.validated_by && !current.validated_by.includes(v.validated_by)) {
-          current.validated_by += `, ${v.validated_by}`;
+        if (v.validated_by) {
+          current.validatorSet.add(v.validated_by);
+          current.validated_by = Array.from(current.validatorSet).join(', ');
+        }
+        // Keep the latest timestamp
+        if (v.created_at && (!current.created_at || new Date(v.created_at) > new Date(current.created_at))) {
+          current.created_at = v.created_at;
         }
       }
     });
-    return Array.from(grouped.values());
+
+    // Second, ensure all batches from batchStats are included and have correct numbers
+    Object.keys(batchStats).forEach(code => {
+      const bs = batchStats[code];
+      if (!grouped.has(code)) {
+        grouped.set(code, {
+          id: code,
+          batch_code: code,
+          status: bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial",
+          total: bs.total,
+          validated: bs.validated,
+          pending: bs.pending,
+          validated_by: 'System',
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        const current = grouped.get(code);
+        current.total = bs.total;
+        current.validated = bs.validated;
+        current.pending = bs.pending;
+        current.status = bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial";
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }, [allValidations, batchStats]);
 
   const filteredBatchActivities = batchActivityData.filter(v => 

@@ -156,11 +156,8 @@ async function runMigrations(isManual = false) {
       await tempClient.from('profiles').select('id').limit(1);
     }
   } catch (err: any) {
-    if (err.message && err.message.includes('ECONNREFUSED')) {
-      console.warn('[Migration] Direct database connection blocked (IPv6). Automatic migrations skipped. Please apply SUPABASE_SETUP.sql manually in your Supabase dashboard.');
-      if (isManual) {
-        throw new Error("Direct database connection blocked. Please copy the contents of SUPABASE_SETUP.sql and run it manually in the Supabase dashboard SQL editor.");
-      }
+    if (err.message && (err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT'))) {
+      console.warn('[Migration] Direct database connection blocked or timed out (likely network/IPv6 restriction). Automatic migrations skipped. Apply SUPABASE_SETUP.sql manually if needed.');
       return;
     }
     
@@ -206,7 +203,7 @@ async function startServer() {
         ssl: 'require', 
         max: 5, // Small pool for stability
         idle_timeout: 20,
-        connect_timeout: 10
+        connect_timeout: 5
       })
     : null;
 
@@ -594,6 +591,8 @@ async function startServer() {
           if (pgErr.message && pgErr.message.includes('authentication')) {
             dbReport.details.push('Postgres Auth Failed: Check your DATABASE_URL password.');
             dbReport.details.push('Tip: URL-encode special characters in your password.');
+          } else if (pgErr.message && (pgErr.message.includes('ECONNREFUSED') || pgErr.message.includes('ETIMEDOUT') || pgErr.message.includes('timeout'))) {
+            dbReport.details.push('Postgres Connection Blocked/Timed Out (IPv6/Network Restriction).');
           } else {
             dbReport.details.push(`Postgres Connection Error: ${pgErr.message}`);
           }
@@ -713,39 +712,75 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       
       console.log('[Stats] Using Supabase SDK fallback for batch_stats...');
       
-      // Fetch data in batches if needed, but for stats we can try a slightly larger select
-      // Note: This is less efficient than SQL GROUP BY but works as a robust fallback
-      const { data: students, error: sErr } = await supabaseAdmin
-        .from('batch_students')
-        .select('batch_code')
-        .eq('batch_status', 'running');
+      const limit = 1000;
+      const pages = [0, 1, 2, 3, 4, 5, 6, 7]; // Up to 8000 records
       
-      if (sErr) throw sErr;
+      // Fetch Students
+      const studentResults = await Promise.all(pages.map(page => {
+        const from = page * limit;
+        return supabaseAdmin
+          .from('batch_students')
+          .select('batch_code, student_code, batch_status')
+          .range(from, from + limit - 1);
+      }));
 
-      const { data: validations, error: vErr } = await supabaseAdmin
-        .from('student_validations')
-        .select('batch_code, status');
-      
-      if (vErr) throw vErr;
+      let students: any[] = [];
+      for (const res of studentResults) {
+        if (res.error) throw res.error;
+        if (res.data) students = [...students, ...res.data];
+        if (res.data && res.data.length < limit) break;
+      }
 
-      const stats: Record<string, { total: number, validated: number, pending: number }> = {};
+      // Fetch Validations
+      const validationResults = await Promise.all(pages.map(page => {
+        const from = page * limit;
+        return supabaseAdmin
+          .from('student_validations')
+          .select('batch_code, student_code, status')
+          .range(from, from + limit - 1);
+      }));
+
+      let validations: any[] = [];
+      for (const res of validationResults) {
+        if (res.error) throw res.error;
+        if (res.data) validations = [...validations, ...res.data];
+        if (res.data && res.data.length < limit) break;
+      }
+
+      // Group students by batch
+      const batchMap: Record<string, { totalSet: Set<string>, validatedSet: Set<string> }> = {};
       
       students?.forEach((row: any) => {
-        if (!stats[row.batch_code]) {
-          stats[row.batch_code] = { total: 0, validated: 0, pending: 0 };
+        if ((row.batch_status || '').toLowerCase() === 'running') {
+          if (!batchMap[row.batch_code]) {
+            batchMap[row.batch_code] = { totalSet: new Set(), validatedSet: new Set() };
+          }
+          batchMap[row.batch_code].totalSet.add(row.student_code);
         }
-        stats[row.batch_code].total++;
       });
 
       validations?.forEach((row: any) => {
-        if (stats[row.batch_code] && (row.status === 'Validated' || row.status === 'ReValidated')) {
-          stats[row.batch_code].validated++;
+        // We only care about validated statuses
+        if (!batchMap[row.batch_code]) {
+           batchMap[row.batch_code] = { totalSet: new Set(), validatedSet: new Set() };
+        }
+        
+        const status = (row.status || '').toLowerCase();
+        if (status === 'validated' || status === 'revalidated') {
+          batchMap[row.batch_code].validatedSet.add(row.student_code);
         }
       });
 
-      // Calculate pending
-      Object.keys(stats).forEach(code => {
-        stats[code].pending = Math.max(0, stats[code].total - stats[code].validated);
+      const stats: Record<string, { total: number, validated: number, pending: number }> = {};
+      
+      Object.keys(batchMap).forEach(code => {
+        const total = batchMap[code].totalSet.size;
+        const validated = batchMap[code].validatedSet.size;
+        stats[code] = {
+          total: total,
+          validated: validated,
+          pending: Math.max(0, total - validated)
+        };
       });
 
       return stats;
@@ -761,18 +796,18 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
     
     try {
-      // Use raw SQL for lightning fast aggregation
+      // Use raw SQL for lightning fast aggregation with DISTINCT to avoid duplicate counts
       const [students, validations] = await Promise.all([
         globalSql`
-          SELECT batch_code, count(*)::int as total 
+          SELECT batch_code, count(DISTINCT student_code)::int as total 
           FROM public.batch_students 
-          WHERE batch_status = 'running' 
+          WHERE LOWER(batch_status) = 'running' 
           GROUP BY batch_code
         `,
         globalSql`
-          SELECT batch_code, count(*)::int as validated
+          SELECT batch_code, count(DISTINCT student_code)::int as validated
           FROM public.student_validations 
-          WHERE status IN ('Validated', 'ReValidated')
+          WHERE LOWER(status) IN ('validated', 'revalidated')
           GROUP BY batch_code
         `
       ]);
@@ -784,7 +819,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       });
 
       validations.forEach((row: any) => {
-        if (stats[row.batch_code]) {
+        if (!stats[row.batch_code]) {
+          // If a batch has validations but isn't marked as "running" in batch_students, 
+          // we should still reflect its validated count
+          stats[row.batch_code] = { total: row.validated, validated: row.validated, pending: 0 };
+        } else {
           stats[row.batch_code].validated = row.validated;
           stats[row.batch_code].pending = Math.max(0, stats[row.batch_code].total - row.validated);
         }
@@ -792,19 +831,25 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
 
       res.json(stats);
     } catch (error: any) {
-      console.error('Error in /api/batch_stats (direct postgres):', error.message);
-      
-      // Specific handling for auth failure or connection issues
-      if (error.message && (error.message.includes('authentication') || error.message.includes('timeout') || error.message.includes('ECONNREFUSED'))) {
+      // Specific handling for network, auth, or connection issues
+      if (error.message && (
+        error.message.includes('authentication') || 
+        error.message.includes('timeout') || 
+        error.message.includes('ECONNREFUSED') || 
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('ETIMEDOUT')
+      )) {
+        console.warn(`[Stats] Postgres direct connection failed (${error.message}). Falling back to SDK.`);
         try {
           const stats = await fallbackStats();
           return res.json(stats);
         } catch (fallbackError: any) {
           console.error('Batch stats fallback also failed:', fallbackError.message);
-          return res.status(500).json({ error: 'Postgres failed and fallback failed: ' + fallbackError.message });
+          return res.status(500).json({ error: 'Postgres direct connection failed and fallback failed: ' + fallbackError.message });
         }
       }
-      
+
+      console.error('Error in /api/batch_stats (direct postgres):', error.message);
       res.status(500).json({ error: error.message || 'Failed to fetch batch stats' });
     }
   });
