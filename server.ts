@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
@@ -181,9 +180,7 @@ async function runMigrations(isManual = false) {
   }
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
 
   // Run migrations in background to prevent blocking server startup
   runMigrations(false).catch(err => {
@@ -827,8 +824,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
   });
 
-  // Vite middleware for development
+  // Vite middleware for development or fallback static serving
+async function setupServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -837,14 +836,26 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+    // Check missing paths and serve index.html (SPA fallback)
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      // Only serve index.html for non-API routes
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(distPath, 'index.html'));
+      } else {
+        res.status(404).json({ error: 'API route not found' });
+      }
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  // Only listen to port if not running in Vercel. Vercel provides process.env.VERCEL
+  if (!process.env.VERCEL) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }
 }
 
-startServer();
+setupServer();
+
+export default app;
