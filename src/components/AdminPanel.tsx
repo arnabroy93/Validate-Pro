@@ -143,17 +143,18 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           'No. of Validation': v.validated,
           'No. of Pending': v.pending,
           'Validated By': v.validated_by,
-          'Date': dateOnly
+          'Latest Timestamp': dateOnly
         };
       }
       
       return {
-        'student_code': v.student_code,
-        'student_name': v.student_name,
-        'batch_code': v.batch_code,
-        'status': v.status,
-        'validated_by': v.validated_by,
-        'created_at': v.created_at,
+        'Student Code': v.student_code,
+        'Student Name': v.student_name,
+        'Batch Code': v.batch_code,
+        'Validation Status': v.status,
+        'Assigned AE': v.ae_name,
+        'Validated By': v.validated_by,
+        'Latest Timestamp': dateOnly,
       };
     });
   };
@@ -184,11 +185,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const handleExportPDF = (data: any[] = validations, prefix = 'Validations') => {
     const doc = new jsPDF('l', 'pt');
     
-    let head = [['Code', 'Name', 'Batch', 'Status', 'Validated By', 'Date']];
+    let head = [['Code', 'Name', 'Batch', 'Status', 'Assigned AE', 'Validated By', 'Latest Timestamp']];
     let bodyData: any[] = [];
     
     if (prefix === 'User_Activity') {
-      head = [['Batch Code', 'Validation Status', 'Total no. of Student', 'No. of Validation', 'No. of Pending', 'Validated By', 'Date']];
+      head = [['Batch Code', 'Validation Status', 'Total no. of Student', 'No. of Validation', 'No. of Pending', 'Validated By', 'Latest Timestamp']];
       bodyData = data.map(v => {
         const d = new Date(v.created_at || new Date());
         const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -198,7 +199,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       });
     } else {
       bodyData = data.map(v => [
-        v.student_code, v.student_name, v.batch_code, v.status, v.validated_by, formatDate(v.created_at!)
+        v.student_code, v.student_name, v.batch_code, v.status, v.ae_name, v.validated_by, formatDate(v.created_at!)
       ]);
     }
     
@@ -603,7 +604,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <th className="px-8 py-5">Academic Context</th>
                       <th className="px-8 py-5">Validation Status</th>
                       <th className="px-8 py-5">Assigned Auditor</th>
-                      <th className="px-8 py-5 text-right whitespace-nowrap">Timestamp</th>
+                      <th className="px-8 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-divide">
@@ -728,7 +729,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <th className="px-6 py-5 text-center">Validated</th>
                       <th className="px-6 py-5 text-center">Pending</th>
                       <th className="px-6 py-5">Validated By</th>
-                      <th className="px-6 py-5 text-right whitespace-nowrap">Date</th>
+                      <th className="px-6 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-divide">

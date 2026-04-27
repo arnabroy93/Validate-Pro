@@ -27,6 +27,8 @@ interface BatchSummary {
   absent: number;
   rejected: number;
   latest_timestamp: string;
+  assigned_ae: string;
+  validated_by: string;
 }
 
 export function ReportPanel() {
@@ -103,7 +105,7 @@ export function ReportPanel() {
       const combinedValidations: any[] = [];
       
       // Calculate Summary
-      const summaryMap = new Map<string, BatchSummary>();
+      const summaryMap = new Map<string, BatchSummary & { validatorSet: Set<string> }>();
       
       uniqueStudentsMap.forEach((student: any) => {
         const sumKey = `${student.center_code}_${student.batch_code}`;
@@ -117,7 +119,10 @@ export function ReportPanel() {
             pending: 0,
             absent: 0,
             rejected: 0,
-            latest_timestamp: student.created_at || ''
+            latest_timestamp: student.created_at || '',
+            assigned_ae: student.ae_name || '',
+            validated_by: '',
+            validatorSet: new Set()
           });
         }
         
@@ -125,6 +130,11 @@ export function ReportPanel() {
         summary.total_students += 1;
         
         const validationRow = vDataMap.get(`${student.batch_code}_${student.student_code}`);
+        
+        if (validationRow?.validated_by) {
+          summary.validatorSet.add(validationRow.validated_by);
+          summary.validated_by = Array.from(summary.validatorSet).join(', ');
+        }
         
         const currentStatus = validationRow?.status || 'Pending';
         
@@ -144,6 +154,7 @@ export function ReportPanel() {
             student_name: student.student_name,
             center_code: student.center_code,
             batch_code: student.batch_code,
+            ae_name: student.ae_name || '',
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
             remarks: validationRow?.remarks || '',
@@ -164,10 +175,11 @@ export function ReportPanel() {
     }
   };
 
-  const handleExportExcel = (dataToExport: StudentValidation[], fileName: string) => {
-    const formattedData = dataToExport.map(({ id, created_at, ...rest }) => ({
+  const handleExportExcel = (dataToExport: any[], fileName: string) => {
+    const formattedData = dataToExport.map(({ id, created_at, ae_name, ...rest }) => ({
       ...rest,
-      Date: created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
+      'Assigned AE': ae_name || 'N/A',
+      'Latest Timestamp': created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
     }));
     const ws = XLSX.utils.json_to_sheet(formattedData);
     const wb = XLSX.utils.book_new();
@@ -175,10 +187,11 @@ export function ReportPanel() {
     XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const handleExportCSV = (dataToExport: StudentValidation[], fileName: string) => {
-    const formattedData = dataToExport.map(({ id, created_at, ...rest }) => ({
+  const handleExportCSV = (dataToExport: any[], fileName: string) => {
+    const formattedData = dataToExport.map(({ id, created_at, ae_name, ...rest }) => ({
       ...rest,
-      Date: created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
+      'Assigned AE': ae_name || 'N/A',
+      'Latest Timestamp': created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
     }));
     const ws = XLSX.utils.json_to_sheet(formattedData);
     const csv = XLSX.utils.sheet_to_csv(ws);
@@ -193,14 +206,14 @@ export function ReportPanel() {
     document.body.removeChild(link);
   };
 
-  const handleExportPDF = (dataToExport: StudentValidation[], fileName: string) => {
+  const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.status, v.validated_by, v.remarks || '', formatDate(v.created_at!)
+      v.student_code, v.student_name, v.batch_code, v.status, v.ae_name || 'N/A', v.validated_by, v.remarks || '', formatDate(v.created_at!)
     ]);
     
     (doc as any).autoTable({
-      head: [['Code', 'Name', 'Batch', 'Status', 'Validated By', 'Remarks', 'Date']],
+      head: [['Code', 'Name', 'Batch', 'Status', 'Assigned AE', 'Validated By', 'Remarks', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -245,7 +258,9 @@ export function ReportPanel() {
         'Pending': s.pending,
         'Absent': s.absent,
         'Rejected': s.rejected,
-        'Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
+        'Assigned AE': s.assigned_ae,
+        'Validated By': s.validated_by,
+        'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -269,7 +284,9 @@ export function ReportPanel() {
         'Pending': s.pending,
         'Absent': s.absent,
         'Rejected': s.rejected,
-        'Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
+        'Assigned AE': s.assigned_ae,
+        'Validated By': s.validated_by,
+        'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const csv = XLSX.utils.sheet_to_csv(ws);
@@ -292,11 +309,11 @@ export function ReportPanel() {
     const dataToExport = summaryData.filter(s => selectedBatchesForExport.has(s.batch_code));
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(s => [
-      s.center_code, s.batch_code, s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), formatDate(s.latest_timestamp)
+      s.center_code, s.batch_code, s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), s.assigned_ae, s.validated_by, formatDate(s.latest_timestamp)
     ]);
     
     (doc as any).autoTable({
-      head: [['Center Code', 'Batch Code', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Timestamp']],
+      head: [['Center Code', 'Batch Code', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Assigned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -405,7 +422,9 @@ export function ReportPanel() {
                   <th className="px-6 py-5">Pending</th>
                   <th className="px-6 py-5">Absent</th>
                   <th className="px-6 py-5">Rejected</th>
-                  <th className="px-6 py-5">Timestamp</th>
+                  <th className="px-6 py-5">Assigned AE</th>
+                  <th className="px-6 py-5">Validated By</th>
+                  <th className="px-6 py-5">Latest Timestamp</th>
                   <th className="px-6 py-5">Actions</th>
                 </tr>
               </thead>
@@ -444,6 +463,12 @@ export function ReportPanel() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-black text-rose-600">{s.rejected}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                         <p className="text-[11px] font-bold text-slate-700">{s.assigned_ae}</p>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                         <p className="text-[11px] font-bold text-slate-700">{s.validated_by || 'N/A'}</p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                          <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(s.latest_timestamp)}</p>
@@ -523,7 +548,7 @@ export function ReportPanel() {
                         <th className="px-6 py-4">Remarks</th>
                         <th className="px-6 py-4">Mic</th>
                         <th className="px-6 py-4">Video</th>
-                        <th className="px-6 py-4">Timestamp</th>
+                        <th className="px-6 py-4">Latest Timestamp</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-divide">

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.student_validations (
   dob TEXT,
   father_name TEXT,
   address TEXT,
+  aligned_ae TEXT,
   validated_by TEXT,
   status TEXT DEFAULT 'Pending',
   remarks TEXT,

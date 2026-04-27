@@ -430,7 +430,11 @@ export function Dashboard() {
       }
       toast.success('Batch validations submitted successfully!');
     } catch (error: any) {
-      toast.error(error.message || 'Error submitting data');
+      let errMsg = error.message || 'Error submitting data';
+      if (errMsg.includes('aligned_ae') || errMsg.includes('schema cache')) {
+        errMsg = 'Database Error: Please go to Supabase SQL editor and run: ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS aligned_ae TEXT; NOTIFY pgrst, \'reload schema\';';
+      }
+      toast.error(errMsg, { duration: 10000 });
     } finally {
       setLoading(false);
     }

@@ -34,15 +34,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
         console.error('Auth Session Error:', error);
         
-        if (retryCount < maxRetries && !error.message.includes('Refresh Token Not Found')) {
+        const isRefreshTokenError = error?.message?.includes('Refresh Token Not Found') || 
+                                    error?.message?.includes('Invalid Refresh Token') || 
+                                    error?.message?.includes('refresh_token_not_found');
+
+        if (retryCount < maxRetries && !isRefreshTokenError) {
           retryCount++;
           console.log(`Retrying auth initialization (${retryCount}/${maxRetries})...`);
           setTimeout(initializeAuth, 1000 * retryCount);
           return;
         }
 
-        if (error.message.includes('Refresh Token Not Found') || error.message.includes('Invalid Refresh Token')) {
-          supabase.auth.signOut();
+        if (isRefreshTokenError) {
+          console.warn('Invalid refresh token found. Force clearing local session.');
+          try {
+            // Strip any leftover tokens from localStorage that might be keeping us stuck
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.includes('-auth-token')) {
+                localStorage.removeItem(key);
+              }
+            }
+            await supabase.auth.signOut().catch(() => {});
+          } catch (err) {
+            console.error('Error during forced sign out:', err);
+          }
+          setUser(null);
+          setProfile(null);
         }
         setLoading(false);
       }
