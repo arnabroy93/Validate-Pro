@@ -28,10 +28,12 @@ export function Dashboard() {
   const [fetchingData, setFetchingData] = useState(false);
 
   // Filters state
-  const [validatedBy, setValidatedBy] = useState('');
+  const [alignedAe, setAlignedAe] = useState('');
   const [selectedCenter, setSelectedCenter] = useState('');
   const [selectedBatch, setSelectedBatch] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
+
+  const validatedBy = profile?.username || '';
 
   // Local validation state
   // Key: student_code, Value: validation details
@@ -172,11 +174,18 @@ export function Dashboard() {
             }
           }
 
-          const existingSet = new Set((existingData || []).map(r => `${r.center_code}_${r.batch_code}_${r.student_code}`));
+          const existingSet = new Set((existingData || []).map(r => 
+            String(`${r.center_code}_${r.batch_code}_${r.student_code}`).toLowerCase().trim()
+          ));
 
+          const uniqueNewRecordsSet = new Set();
           const newRecordsToInsert = normalizedData.filter(newRow => {
-            const key = `${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`;
-            return !existingSet.has(key);
+            const key = String(`${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`).toLowerCase().trim();
+            if (existingSet.has(key) || uniqueNewRecordsSet.has(key)) {
+              return false;
+            }
+            uniqueNewRecordsSet.add(key);
+            return true;
           });
 
           if (newRecordsToInsert.length === 0) {
@@ -281,7 +290,7 @@ export function Dashboard() {
 
   const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
     if (!validatedBy) {
-      toast.error('Please Select AE Name first');
+      toast.error('User profile not fully loaded. Please reload.');
       return;
     }
 
@@ -313,6 +322,7 @@ export function Dashboard() {
       father_name: student.father_name,
       address: student.address,
       validated_by: validatedBy,
+      aligned_ae: alignedAe || '',
       status: v.status || 'Pending',
       remarks: v.remarks || '',
       mic_on: v.mic_on || false,
@@ -360,7 +370,7 @@ export function Dashboard() {
   const handleSubmit = async () => {
     if (!selectedBatch) return;
     if (!validatedBy) {
-      toast.error('Please Select AE Name first');
+      toast.error('User profile not fully loaded. Please reload.');
       return;
     }
     
@@ -386,6 +396,7 @@ export function Dashboard() {
         father_name: student.father_name,
         address: student.address,
         validated_by: validatedBy,
+        aligned_ae: alignedAe || '',
         status: v.status || 'Pending',
         remarks: v.remarks || '',
         mic_on: v.mic_on || false,
@@ -455,16 +466,27 @@ export function Dashboard() {
               key="filters-config"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-3 gap-6 glass-card p-6"
+              className="grid grid-cols-4 gap-6 glass-card p-6"
             >
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Validated By</label>
-                <select 
+                <input 
+                  type="text"
                   value={validatedBy}
-                  onChange={(e) => setValidatedBy(e.target.value)}
+                  disabled
+                  readOnly
+                  className="input-field disabled:opacity-70 bg-slate-50/50 cursor-not-allowed font-semibold text-slate-700 select-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Aligned AE</label>
+                <select 
+                  value={alignedAe}
+                  onChange={(e) => setAlignedAe(e.target.value)}
                   className="input-field"
                 >
-                  <option value="" disabled>Please Select AE Name</option>
+                  <option value="">Select Aligned AE</option>
                   {VALIDATED_BY_OPTIONS.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>

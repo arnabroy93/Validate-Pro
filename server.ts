@@ -53,6 +53,7 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS student_code TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS student_name TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS ae_name TEXT;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS aligned_ae TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS center_code TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS batch_code TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validated_by TEXT;`;
@@ -643,30 +644,32 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
       
       const limit = 1000;
-      const pages = [0, 1, 2, 3, 4, 5, 6, 7]; // Up to 8000 records
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
       
-      const results = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
+      while (hasMore) {
+        const { data, error } = await supabaseAdmin
           .from('batch_students')
           .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, created_at')
-          .order('created_at', { ascending: false })
           .order('id', { ascending: false })
           .range(from, from + limit - 1);
-      }));
 
-      let allData: any[] = [];
-      for (const res of results) {
-        if (res.error) throw res.error;
-        if (res.data) allData = [...allData, ...res.data];
-        if (res.data && res.data.length < limit) break;
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += limit;
+          if (data.length < limit) hasMore = false;
+        } else {
+          hasMore = false;
+        }
       }
       
-      // Ensure absolute sorting after parallel fetch combining
+      // Ensure absolute sorting
       allData.sort((a, b) => {
         const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         if (timeDiff !== 0) return timeDiff;
-        return (b.id || 0) - (a.id || 0); // fallback to id desc
+        return String(b.id || "").localeCompare(String(a.id || "")); // id is UUID
       });
       
       res.json(allData);
@@ -681,29 +684,31 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
       
       const limit = 1000;
-      const pages = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // Up to 10k validations
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
       
-      const results = await Promise.all(pages.map(page => {
-        const from = page * limit;
-        return supabaseAdmin
+      while (hasMore) {
+        const { data, error } = await supabaseAdmin
           .from('student_validations')
           .select('*')
-          .order('created_at', { ascending: false })
           .order('id', { ascending: false })
           .range(from, from + limit - 1);
-      }));
 
-      let allData: any[] = [];
-      for (const res of results) {
-        if (res.error) throw res.error;
-        if (res.data) allData = [...allData, ...res.data];
-        if (res.data && res.data.length < limit) break;
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += limit;
+          if (data.length < limit) hasMore = false;
+        } else {
+          hasMore = false;
+        }
       }
 
       allData.sort((a, b) => {
         const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         if (timeDiff !== 0) return timeDiff;
-        return (b.id || 0) - (a.id || 0);
+        return String(b.id || "").localeCompare(String(a.id || ""));
       });
       res.json(allData);
     } catch (error: any) {

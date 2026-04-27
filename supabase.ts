@@ -50,6 +50,7 @@ export type StudentValidation = {
   father_name: string;
   address: string;
   validated_by: string;
+  aligned_ae?: string;
   status: 'Validated' | 'ReValidated' | 'Absent' | 'Rejected' | 'Pending';
   remarks: string;
   mic_on?: boolean;
