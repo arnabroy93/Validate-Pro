@@ -131,6 +131,10 @@ export function ReportPanel() {
         
         const validationRow = vDataMap.get(`${student.batch_code}_${student.student_code}`);
         
+        if (validationRow?.aligned_ae || validationRow?.ae_name) {
+          summary.assigned_ae = validationRow.aligned_ae || validationRow.ae_name || summary.assigned_ae;
+        }
+        
         if (validationRow?.validated_by) {
           summary.validatorSet.add(validationRow.validated_by);
           summary.validated_by = Array.from(summary.validatorSet).join(', ');
@@ -154,13 +158,13 @@ export function ReportPanel() {
             student_name: validationRow?.student_name || student.student_name,
             center_code: validationRow?.center_code || student.center_code,
             batch_code: validationRow?.batch_code || student.batch_code,
-            ae_name: validationRow?.ae_name || student.ae_name || '',
+            ae_name: validationRow?.aligned_ae || validationRow?.ae_name || student.aligned_ae || student.ae_name || '',
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
             remarks: validationRow?.remarks || '',
             mic_on: validationRow?.mic_on || false,
             video_on: validationRow?.video_on || false,
-            created_at: validationRow?.created_at || student.created_at
+            created_at: validationRow?.created_at || null
         });
       });
       
@@ -182,7 +186,7 @@ export function ReportPanel() {
       'Batch Code': v.batch_code,
       'Center Code': v.center_code,
       'Validation Status': v.status,
-      'Assigned AE': v.ae_name || 'N/A',
+      'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
       'Latest Timestamp': v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'
     }));
@@ -216,7 +220,7 @@ export function ReportPanel() {
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Validation Status', 'Assigned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Validation Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -261,7 +265,7 @@ export function ReportPanel() {
         'Pending': s.pending,
         'Absent': s.absent,
         'Rejected': s.rejected,
-        'Assigned AE': s.assigned_ae,
+        'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
         'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
       }));
@@ -287,7 +291,7 @@ export function ReportPanel() {
         'Pending': s.pending,
         'Absent': s.absent,
         'Rejected': s.rejected,
-        'Assigned AE': s.assigned_ae,
+        'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
         'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
       }));
@@ -316,7 +320,7 @@ export function ReportPanel() {
     ]);
     
     (doc as any).autoTable({
-      head: [['Center Code', 'Batch Code', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Assigned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Center Code', 'Batch Code', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -425,7 +429,7 @@ export function ReportPanel() {
                   <th className="px-6 py-5">Pending</th>
                   <th className="px-6 py-5">Absent</th>
                   <th className="px-6 py-5">Rejected</th>
-                  <th className="px-6 py-5">Assigned AE</th>
+                  <th className="px-6 py-5">Aligned AE</th>
                   <th className="px-6 py-5">Validated By</th>
                   <th className="px-6 py-5">Latest Timestamp</th>
                   <th className="px-6 py-5">Actions</th>
@@ -545,10 +549,12 @@ export function ReportPanel() {
                   <table className="w-full text-left relative">
                     <thead className="bg-white/90 border-b border-brand-border backdrop-blur-sm sticky top-0 z-10">
                       <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
-                        <th className="px-6 py-4">Student Identity</th>
-                        <th className="px-6 py-4">Batch & Center Code</th>
+                        <th className="px-6 py-4">Student Code</th>
+                        <th className="px-6 py-4">Student Name</th>
+                        <th className="px-6 py-4">Batch Code</th>
+                        <th className="px-6 py-4">Center Code</th>
                         <th className="px-6 py-4">Validation Status</th>
-                        <th className="px-6 py-4">Assigned AE</th>
+                        <th className="px-6 py-4">Aligned AE</th>
                         <th className="px-6 py-4">Validated By</th>
                         <th className="px-6 py-4">Latest Timestamp</th>
                       </tr>
@@ -557,12 +563,16 @@ export function ReportPanel() {
                       {selectedBatchData.map((v, idx) => (
                         <tr key={v.id} className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover:bg-brand-light transition-colors backdrop-blur-sm")}>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <p className="font-bold text-sm text-brand-text mb-0.5">{v.student_name}</p>
-                            <span className="text-[9px] bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono font-black">{v.student_code}</span>
+                            <span className="text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded font-mono font-bold border border-slate-200">{v.student_code}</span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <span className="font-bold text-slate-600 text-xs mb-0.5 block">{v.batch_code}</span>
-                            <span className="font-bold text-[9px] uppercase tracking-widest text-brand-primary">{v.center_code}</span>
+                            <p className="font-bold text-sm text-brand-text mb-0.5">{v.student_name}</p>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className="font-bold text-slate-600 text-xs block">{v.batch_code}</span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className="font-bold text-[10px] uppercase tracking-widest text-brand-primary">{v.center_code}</span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(

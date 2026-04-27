@@ -152,7 +152,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         'Student Name': v.student_name,
         'Batch Code': v.batch_code,
         'Validation Status': v.status,
-        'Assigned AE': v.ae_name,
+        'Aligned AE': v.aligned_ae || v.ae_name || 'N/A',
         'Validated By': v.validated_by,
         'Latest Timestamp': dateOnly,
       };
@@ -185,7 +185,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const handleExportPDF = (data: any[] = validations, prefix = 'Validations') => {
     const doc = new jsPDF('l', 'pt');
     
-    let head = [['Code', 'Name', 'Batch', 'Status', 'Assigned AE', 'Validated By', 'Latest Timestamp']];
+    let head = [['Code', 'Name', 'Batch', 'Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']];
     let bodyData: any[] = [];
     
     if (prefix === 'User_Activity') {
@@ -199,7 +199,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       });
     } else {
       bodyData = data.map(v => [
-        v.student_code, v.student_name, v.batch_code, v.status, v.ae_name, v.validated_by, formatDate(v.created_at!)
+        v.student_code, v.student_name, v.batch_code, v.status, v.aligned_ae || v.ae_name || 'N/A', v.validated_by, formatDate(v.created_at!)
       ]);
     }
     
@@ -623,7 +623,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             <div className="flex items-center gap-1.5">
                               <p className="text-[9px] uppercase font-black text-brand-primary tracking-widest">{v.center_code}</p>
                               <span className="h-3 w-[1px] bg-slate-200" />
-                              <p className="text-[9px] text-slate-400 font-bold">{v.ae_name}</p>
+                              <p className="text-[9px] text-slate-400 font-bold">{v.aligned_ae || v.ae_name || 'N/A'}</p>
                             </div>
                           </td>
                           <td className="px-8 py-5 whitespace-nowrap">
