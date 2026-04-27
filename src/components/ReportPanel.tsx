@@ -188,7 +188,7 @@ export function ReportPanel() {
       'Validation Status': v.status,
       'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
-      'Latest Timestamp': v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'
+      'Latest Timestamp': v.created_at ? formatDate(v.created_at) : 'N/A'
     }));
   };
 
@@ -216,7 +216,7 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
@@ -267,7 +267,7 @@ export function ReportPanel() {
         'Rejected': s.rejected,
         'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
-        'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
+        'Latest Timestamp': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -293,7 +293,7 @@ export function ReportPanel() {
         'Rejected': s.rejected,
         'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
-        'Latest Timestamp': s.latest_timestamp ? new Date(s.latest_timestamp).toLocaleDateString() : 'N/A'
+        'Latest Timestamp': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const csv = XLSX.utils.sheet_to_csv(ws);
@@ -432,7 +432,7 @@ export function ReportPanel() {
                   <th className="px-6 py-5">Aligned AE</th>
                   <th className="px-6 py-5">Validated By</th>
                   <th className="px-6 py-5">Latest Timestamp</th>
-                  <th className="px-6 py-5">Actions</th>
+                  <th className="px-6 py-5 sticky right-0 bg-white/90 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] backdrop-blur-sm z-10">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-divide">
@@ -480,7 +480,7 @@ export function ReportPanel() {
                       <td className="px-6 py-4 whitespace-nowrap">
                          <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(s.latest_timestamp)}</p>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap sticky right-0 bg-white shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
                          <button 
                            onClick={() => setSelectedBatch(s.batch_code)}
                            className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"
@@ -492,7 +492,7 @@ export function ReportPanel() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={11} className="px-8 py-20 text-center">
+                    <td colSpan={13} className="px-8 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <Search size={48} className="text-slate-200" />
                         <p className="text-slate-400 font-bold">No reports matched your criteria.</p>
@@ -593,7 +593,7 @@ export function ReportPanel() {
                              <p className="text-[11px] font-bold text-slate-700">{v.validated_by || 'N/A'}</p>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <p className="text-[11px] text-slate-500 font-mono font-bold">{v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'}</p>
+                            <p className="text-[11px] text-slate-500 font-mono font-bold">{v.created_at ? formatDate(v.created_at) : 'N/A'}</p>
                           </td>
                         </tr>
                       ))}
