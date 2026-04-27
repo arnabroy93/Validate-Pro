@@ -775,64 +775,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       return stats;
     };
 
-    if (!globalSql) {
-      try {
-        const stats = await fallbackStats();
-        return res.json(stats);
-      } catch (err: any) {
-        return res.status(500).json({ error: 'DATABASE_URL is not configured and fallback failed: ' + err.message });
-      }
-    }
-    
     try {
-      // Use raw SQL for lightning fast aggregation with DISTINCT to avoid duplicate counts
-      const [students, validations] = await Promise.all([
-        globalSql`
-          SELECT batch_code, count(DISTINCT student_code)::int as total 
-          FROM public.batch_students 
-          GROUP BY batch_code
-        `,
-        globalSql`
-          SELECT batch_code, count(DISTINCT student_code)::int as validated
-          FROM public.student_validations 
-          WHERE LOWER(status) IN ('validated', 'revalidated')
-          GROUP BY batch_code
-        `
-      ]);
-
-      const stats: Record<string, { total: number, validated: number, pending: number }> = {};
-      
-      students.forEach((row: any) => {
-        stats[row.batch_code] = { total: row.total, validated: 0, pending: row.total };
-      });
-
-      validations.forEach((row: any) => {
-        if (!stats[row.batch_code]) {
-          // If a batch has validations but isn't marked as "running" in batch_students, 
-          // we should still reflect its validated count
-          stats[row.batch_code] = { total: row.validated, validated: row.validated, pending: 0 };
-        } else {
-          stats[row.batch_code].validated = row.validated;
-          stats[row.batch_code].pending = Math.max(0, stats[row.batch_code].total - row.validated);
-        }
-      });
-
-      res.json(stats);
-    } catch (error: any) {
-      console.error('Error in /api/batch_stats (direct postgres):', error.message);
-      
-      // Specific handling for auth failure or connection issues
-      if (error.message && (error.message.includes('authentication') || error.message.includes('timeout') || error.message.includes('ECONNREFUSED'))) {
-        try {
-          const stats = await fallbackStats();
-          return res.json(stats);
-        } catch (fallbackError: any) {
-          console.error('Batch stats fallback also failed:', fallbackError.message);
-          return res.status(500).json({ error: 'Postgres failed and fallback failed: ' + fallbackError.message });
-        }
-      }
-      
-      res.status(500).json({ error: error.message || 'Failed to fetch batch stats' });
+      const stats = await fallbackStats();
+      return res.json(stats);
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed to fetch batch stats: ' + err.message });
     }
   });
 

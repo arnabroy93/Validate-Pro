@@ -150,11 +150,11 @@ export function ReportPanel() {
 
         combinedValidations.push({
             id: validationRow?.id || `pending-${student.student_code}`,
-            student_code: student.student_code,
-            student_name: student.student_name,
-            center_code: student.center_code,
-            batch_code: student.batch_code,
-            ae_name: student.ae_name || '',
+            student_code: validationRow?.student_code || student.student_code,
+            student_name: validationRow?.student_name || student.student_name,
+            center_code: validationRow?.center_code || student.center_code,
+            batch_code: validationRow?.batch_code || student.batch_code,
+            ae_name: validationRow?.ae_name || student.ae_name || '',
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
             remarks: validationRow?.remarks || '',
@@ -175,25 +175,28 @@ export function ReportPanel() {
     }
   };
 
-  const handleExportExcel = (dataToExport: any[], fileName: string) => {
-    const formattedData = dataToExport.map(({ id, created_at, ae_name, ...rest }) => ({
-      ...rest,
-      'Assigned AE': ae_name || 'N/A',
-      'Latest Timestamp': created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
+  const getFormattedData = (data: any[]) => {
+    return data.map(v => ({
+      'Student Code': v.student_code,
+      'Student Name': v.student_name,
+      'Batch Code': v.batch_code,
+      'Center Code': v.center_code,
+      'Validation Status': v.status,
+      'Assigned AE': v.ae_name || 'N/A',
+      'Validated By': v.validated_by || 'N/A',
+      'Latest Timestamp': v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'
     }));
-    const ws = XLSX.utils.json_to_sheet(formattedData);
+  };
+
+  const handleExportExcel = (dataToExport: any[], fileName: string) => {
+    const ws = XLSX.utils.json_to_sheet(getFormattedData(dataToExport));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleExportCSV = (dataToExport: any[], fileName: string) => {
-    const formattedData = dataToExport.map(({ id, created_at, ae_name, ...rest }) => ({
-      ...rest,
-      'Assigned AE': ae_name || 'N/A',
-      'Latest Timestamp': created_at ? new Date(created_at).toLocaleDateString() : 'N/A'
-    }));
-    const ws = XLSX.utils.json_to_sheet(formattedData);
+    const ws = XLSX.utils.json_to_sheet(getFormattedData(dataToExport));
     const csv = XLSX.utils.sheet_to_csv(ws);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -209,11 +212,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.status, v.ae_name || 'N/A', v.validated_by, v.remarks || '', formatDate(v.created_at!)
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Code', 'Name', 'Batch', 'Status', 'Assigned AE', 'Validated By', 'Remarks', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Validation Status', 'Assigned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -543,11 +546,10 @@ export function ReportPanel() {
                     <thead className="bg-white/90 border-b border-brand-border backdrop-blur-sm sticky top-0 z-10">
                       <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
                         <th className="px-6 py-4">Student Identity</th>
-                        <th className="px-6 py-4">Center Code</th>
+                        <th className="px-6 py-4">Batch & Center Code</th>
                         <th className="px-6 py-4">Validation Status</th>
-                        <th className="px-6 py-4">Remarks</th>
-                        <th className="px-6 py-4">Mic</th>
-                        <th className="px-6 py-4">Video</th>
+                        <th className="px-6 py-4">Assigned AE</th>
+                        <th className="px-6 py-4">Validated By</th>
                         <th className="px-6 py-4">Latest Timestamp</th>
                       </tr>
                     </thead>
@@ -559,7 +561,8 @@ export function ReportPanel() {
                             <span className="text-[9px] bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono font-black">{v.student_code}</span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <span className="font-bold text-slate-600 text-xs mb-0.5">{v.center_code}</span>
+                            <span className="font-bold text-slate-600 text-xs mb-0.5 block">{v.batch_code}</span>
+                            <span className="font-bold text-[9px] uppercase tracking-widest text-brand-primary">{v.center_code}</span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
@@ -573,17 +576,14 @@ export function ReportPanel() {
                               {v.status || 'Pending'}
                             </span>
                           </td>
-                          <td className="px-6 py-3 max-w-[200px] truncate" title={v.remarks}>
-                             <span className="text-xs text-slate-600 font-medium">{v.remarks || '-'}</span>
-                          </td>
-                          <td className="px-6 py-3">
-                             <div className={cn("w-3 h-3 rounded-full", v.mic_on ? "bg-emerald-500" : "bg-slate-300")} />
-                          </td>
-                          <td className="px-6 py-3">
-                             <div className={cn("w-3 h-3 rounded-full", v.video_on ? "bg-emerald-500" : "bg-slate-300")} />
+                          <td className="px-6 py-3 whitespace-nowrap">
+                             <p className="text-[11px] font-bold text-slate-700">{v.ae_name || 'N/A'}</p>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(v.created_at!)}</p>
+                             <p className="text-[11px] font-bold text-slate-700">{v.validated_by || 'N/A'}</p>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <p className="text-[11px] text-slate-500 font-mono font-bold">{v.created_at ? new Date(v.created_at).toLocaleDateString() : 'N/A'}</p>
                           </td>
                         </tr>
                       ))}

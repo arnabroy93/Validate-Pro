@@ -601,9 +601,9 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   <thead className="bg-white/40 border-b border-brand-border backdrop-blur-sm">
                     <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
                       <th className="px-8 py-5">Student Identity</th>
-                      <th className="px-8 py-5">Academic Context</th>
+                      <th className="px-8 py-5">Batch & Center Code</th>
                       <th className="px-8 py-5">Validation Status</th>
-                      <th className="px-8 py-5">Assigned Auditor</th>
+                      <th className="px-8 py-5">Validated By</th>
                       <th className="px-8 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
                     </tr>
                   </thead>
