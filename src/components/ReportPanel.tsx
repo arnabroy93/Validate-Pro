@@ -185,6 +185,8 @@ export function ReportPanel() {
       'Student Name': v.student_name,
       'Batch Code': v.batch_code,
       'Center Code': v.center_code,
+      'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
+      'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
       'Validation Status': v.status,
       'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
@@ -216,11 +218,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Validation Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Mic', 'Camera', 'Validation Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -553,6 +555,8 @@ export function ReportPanel() {
                         <th className="px-6 py-4">Student Name</th>
                         <th className="px-6 py-4">Batch Code</th>
                         <th className="px-6 py-4">Center Code</th>
+                        <th className="px-6 py-4">Mic</th>
+                        <th className="px-6 py-4">Camera</th>
                         <th className="px-6 py-4">Validation Status</th>
                         <th className="px-6 py-4">Aligned AE</th>
                         <th className="px-6 py-4">Validated By</th>
@@ -573,6 +577,22 @@ export function ReportPanel() {
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className="font-bold text-[10px] uppercase tracking-widest text-brand-primary">{v.center_code}</span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
+                              v.mic_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                            )}>
+                              {v.mic_on ? 'Turned On' : 'Not Turn On'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
+                              v.video_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                            )}>
+                              {v.video_on ? 'Turned On' : 'Not Turn On'}
+                            </span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
