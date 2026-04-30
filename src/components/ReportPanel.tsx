@@ -188,6 +188,7 @@ export function ReportPanel() {
       'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
       'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
       'Validation Status': v.status,
+      'Remarks': v.remarks || 'N/A',
       'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
       'Latest Timestamp': v.created_at ? formatDate(v.created_at) : 'N/A'
@@ -218,11 +219,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Mic', 'Camera', 'Validation Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Mic', 'Camera', 'Validation Status', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillStyle: '#0d9488' }
@@ -548,21 +549,23 @@ export function ReportPanel() {
               </div>
               <div className="flex-1 overflow-auto p-6 bg-brand-bg/50">
                 <div className="glass-card rounded-2xl shadow-lg border border-brand-border overflow-hidden">
-                  <table className="w-full text-left relative">
-                    <thead className="bg-white/90 border-b border-brand-border backdrop-blur-sm sticky top-0 z-10">
-                      <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
-                        <th className="px-6 py-4">Student Code</th>
-                        <th className="px-6 py-4">Student Name</th>
-                        <th className="px-6 py-4">Batch Code</th>
-                        <th className="px-6 py-4">Center Code</th>
-                        <th className="px-6 py-4">Mic</th>
-                        <th className="px-6 py-4">Camera</th>
-                        <th className="px-6 py-4">Validation Status</th>
-                        <th className="px-6 py-4">Aligned AE</th>
-                        <th className="px-6 py-4">Validated By</th>
-                        <th className="px-6 py-4">Latest Timestamp</th>
-                      </tr>
-                    </thead>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left relative min-w-max">
+                      <thead className="bg-white/90 border-b border-brand-border backdrop-blur-sm sticky top-0 z-10">
+                        <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
+                          <th className="px-6 py-4">Student Code</th>
+                          <th className="px-6 py-4">Student Name</th>
+                          <th className="px-6 py-4">Batch Code</th>
+                          <th className="px-6 py-4">Center Code</th>
+                          <th className="px-6 py-4">Mic</th>
+                          <th className="px-6 py-4">Camera</th>
+                          <th className="px-6 py-4">Validation Status</th>
+                          <th className="px-6 py-4">Remarks</th>
+                          <th className="px-6 py-4">Aligned AE</th>
+                          <th className="px-6 py-4">Validated By</th>
+                          <th className="px-6 py-4">Latest Timestamp</th>
+                        </tr>
+                      </thead>
                     <tbody className="divide-y divide-brand-divide">
                       {selectedBatchData.map((v, idx) => (
                         <tr key={v.id} className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover:bg-brand-light transition-colors backdrop-blur-sm")}>
@@ -607,6 +610,9 @@ export function ReportPanel() {
                             </span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
+                             <p className="text-[11px] font-bold text-slate-700">{v.remarks || 'N/A'}</p>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
                              <p className="text-[11px] font-bold text-slate-700">{v.ae_name || 'N/A'}</p>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
@@ -619,6 +625,7 @@ export function ReportPanel() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             </motion.div>
