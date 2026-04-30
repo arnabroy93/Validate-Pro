@@ -383,6 +383,18 @@ export function Dashboard() {
 
     const recordsToInsert: any[] = [];
     const recordsToUpdate: any[] = [];
+    
+    // Validate remarks
+    for (const student of filteredStudents) {
+      const v = validations[student.student_code] || {};
+      const remarks = (v.remarks || '').trim();
+      
+      if (!remarks) {
+        toast.error(`remarks should not be blank`);
+        setLoading(false);
+        return;
+      }
+    }
 
     filteredStudents.forEach(student => {
       const v = validations[student.student_code] || {};
