@@ -388,10 +388,9 @@ export function Dashboard() {
     for (const student of filteredStudents) {
       const v = validations[student.student_code] || {};
       const status = v.status || 'Pending';
-      const hasCheckboxSelected = status !== 'Pending' || v.mic_on || v.video_on;
       const remarks = (v.remarks || '').trim();
       
-      if (hasCheckboxSelected && !remarks) {
+      if (status !== 'Pending' && !remarks) {
         toast.error(`remarks should not be blank`);
         setLoading(false);
         return;
