@@ -62,7 +62,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const fetchLastBackup = async () => {
     try {
       const res = await fetch('/api/admin/last-backup');
-      if (res.ok) {
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
         setLastBackup(data);
       }
@@ -78,7 +78,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admin_name: profile.username, admin_id: profile.id })
       });
-      if (!res.ok) throw new Error('Backup failed');
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) throw new Error('Backup failed');
       const data = await res.json();
       const blob = new Blob([data.sql], { type: 'application/sql' });
       const url = URL.createObjectURL(blob);
@@ -100,6 +100,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const checkDbHealth = async () => {
     try {
       const res = await fetch('/api/admin/db-check');
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) throw new Error('DB check failed');
       const data = await res.json();
       setDbStatus(data);
     } catch (e) {
@@ -144,8 +145,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         fetch('/api/batch_stats')
       ]);
 
-      const vData = allValsRes.ok ? await allValsRes.json() : [];
-      const stats = batchStatsRes.ok ? await batchStatsRes.json() : {};
+      const vData = (allValsRes.ok && allValsRes.headers.get('content-type')?.includes('application/json')) ? await allValsRes.json() : [];
+      const stats = (batchStatsRes.ok && batchStatsRes.headers.get('content-type')?.includes('application/json')) ? await batchStatsRes.json() : {};
       
       // Deduplicate validations by student_code for admin panel (latest validation per student)
       const uniqueValsMap = new Map();
@@ -263,6 +264,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
       });
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) throw new Error('Failed to create user');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 

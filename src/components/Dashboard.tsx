@@ -95,8 +95,20 @@ export function Dashboard() {
     try {
       const res = await fetch('/api/batch_data');
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to fetch batch data from API');
+        let errorMsg = 'Failed to fetch batch data from API';
+        try {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await res.json();
+            errorMsg = errorData.error || errorMsg;
+          } else {
+            const textData = await res.text();
+            errorMsg = `API returned HTTP ${res.status}: ${textData.substring(0, 50)}...`;
+          }
+        } catch (e) {
+          errorMsg = `API returned HTTP ${res.status}`;
+        }
+        throw new Error(errorMsg);
       }
       const allData = await res.json();
       setData(allData as BatchStudent[]);

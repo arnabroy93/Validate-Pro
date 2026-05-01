@@ -78,8 +78,13 @@ export function ReportPanel() {
         fetch('/api/batch_data')
       ]);
       
-      const vData = vDataRes.ok ? await vDataRes.json() : await fetchAllTableData('student_validations');
-      const bData = bDataRes.ok ? await bDataRes.json() : await fetchAllTableData('batch_students');
+      const vData = (vDataRes.ok && vDataRes.headers.get('content-type')?.includes('application/json')) 
+        ? await vDataRes.json() 
+        : await fetchAllTableData('student_validations');
+        
+      const bData = (bDataRes.ok && bDataRes.headers.get('content-type')?.includes('application/json')) 
+        ? await bDataRes.json() 
+        : await fetchAllTableData('batch_students');
       
       
       // 1. Deduplicate batch students from excel

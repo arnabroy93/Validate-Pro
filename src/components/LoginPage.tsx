@@ -56,6 +56,12 @@ export function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username })
       });
+      
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      
       const loginData = await res.json();
       
       if (!res.ok) {
