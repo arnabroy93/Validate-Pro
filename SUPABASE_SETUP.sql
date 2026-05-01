@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS public.batch_students (
   uploaded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
 );
 
+-- 4. System Backups Table
+CREATE TABLE IF NOT EXISTS public.system_backups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_name TEXT NOT NULL,
+  admin_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Allow admins to see everything, allow users to see their own entries
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_validations ENABLE ROW LEVEL SECURITY;

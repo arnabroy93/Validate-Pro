@@ -38,9 +38,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     postgresDirect?: string,
     details?: string[]
   } | null>(null);
+  const [lastBackup, setLastBackup] = useState<any>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
   
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity'>('records');
-  
+
   // Update internal tab when prop changes
   useEffect(() => {
     if (forcedTab) {
@@ -54,7 +56,46 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   useEffect(() => {
     fetchData();
     checkDbHealth();
+    fetchLastBackup();
   }, []);
+
+  const fetchLastBackup = async () => {
+    try {
+      const res = await fetch('/api/admin/last-backup');
+      if (res.ok) {
+        const data = await res.json();
+        setLastBackup(data);
+      }
+    } catch (e) {}
+  };
+
+  const handleExportSql = async () => {
+    if (!profile) return;
+    setBackupLoading(true);
+    try {
+      const res = await fetch('/api/admin/export-sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_name: profile.username, admin_id: profile.id })
+      });
+      if (!res.ok) throw new Error('Backup failed');
+      const data = await res.json();
+      const blob = new Blob([data.sql], { type: 'application/sql' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `database_backup_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Database backup exported successfully');
+      fetchLastBackup();
+    } catch (e: any) {
+      toast.error('Failed to export backup: ' + e.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   const checkDbHealth = async () => {
     try {
@@ -392,7 +433,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             className="space-y-6"
           >
             {/* Database Health Section */}
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className={cn(
                 "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm bg-white",
                 dbStatus?.supabaseApi === 'working' ? "border-emerald-100" : "border-red-100"
@@ -416,7 +457,65 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 </div>
                 {dbStatus?.supabaseApi === 'working' && <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />}
               </div>
+
+              {/* SQL Backup Node */}
+              <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col justify-between">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-slate-50 text-slate-600">
+                      <Database size={24} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800">SQL Database Backup</h3>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Export entire backend as SQL sequence</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleExportSql} 
+                    disabled={backupLoading}
+                    className="btn-primary py-2 px-4 shadow-sm text-xs flex items-center gap-2 mt-1 whitespace-nowrap"
+                  >
+                    {backupLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    Export SQL
+                  </button>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-500">
+                  {lastBackup ? (
+                    <div className="flex justify-between items-center">
+                      <span><strong>Last Backup:</strong> {formatDate(lastBackup.created_at)}</span>
+                      <span><strong>By:</strong> {lastBackup.admin_name}</span>
+                    </div>
+                  ) : (
+                    <span>No previous SQL backups.</span>
+                  )}
+                </div>
+              </div>
             </div>
+
+            {dbStatus?.needsSync && (
+              <div className="p-6 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm animate-pulse-light">
+                <div className="flex items-center gap-3 text-amber-800 mb-2">
+                  <ShieldAlert size={20} />
+                  <h3 className="font-bold">Database Schema Update Required</h3>
+                </div>
+                <p className="text-sm text-amber-700 mb-4">
+                  It looks like the system requires a schema update (e.g. creating the backups table). Please copy the SQL below and run it in your Supabase dashboard SQL Editor.
+                </p>
+                <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto relative group">
+                  <pre className="text-emerald-400 text-xs font-mono whitespace-pre-wrap">{dbStatus.sql}</pre>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(dbStatus.sql || '');
+                      toast.success('SQL copied to clipboard');
+                    }}
+                    className="text-xs absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    Copy SQL
+                  </button>
+                </div>
+              </div>
+            )}
+            
           </motion.div>
         )}
 

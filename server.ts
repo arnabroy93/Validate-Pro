@@ -556,6 +556,72 @@ export const app = express();
     }
   });
 
+  app.get('/api/admin/last-backup', async (req, res) => {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin SDK not available' });
+    try {
+       const { data, error } = await supabaseAdmin.from('system_backups').select('*').order('created_at', { ascending: false }).limit(1).single();
+       if (error && error.code !== 'PGRST116') {
+         if (error.message.includes("Could not find the table")) {
+            return res.json(null);
+         }
+         throw error;
+       }
+       res.json(data || null);
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/admin/export-sql', async (req, res) => {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin SDK not available' });
+    
+    try {
+      const { admin_name, admin_id } = req.body;
+      if (!admin_name || !admin_id) return res.status(400).json({ error: 'Admin details required' });
+      
+      const { data: profiles } = await supabaseAdmin.from('profiles').select('*');
+      const { data: studentValidations } = await supabaseAdmin.from('student_validations').select('*');
+      const { data: batchStudents } = await supabaseAdmin.from('batch_students').select('*');
+
+       let sql = '-- Database Backup\n';
+       sql += `-- Generated at ${new Date().toISOString()}\n\n`;
+       const generateInserts = (tableName: string, rows: any[]) => {
+           if (!rows || rows.length === 0) return '';
+           let inserts = `-- Table: ${tableName}\n`;
+           const keys = Object.keys(rows[0]);
+           rows.forEach(row => {
+               const values = keys.map(k => {
+                   if (row[k] === null) return 'NULL';
+                   if (typeof row[k] === 'string') return `'${row[k].replace(/'/g, "''")}'`;
+                   if (typeof row[k] === 'object') return `'${JSON.stringify(row[k]).replace(/'/g, "''")}'`;
+                   if (typeof row[k] === 'boolean') return row[k] ? 'TRUE' : 'FALSE';
+                   return row[k];
+               });
+               inserts += `INSERT INTO public.${tableName} (${keys.join(', ')}) VALUES (${values.join(', ')});\n`;
+           });
+           return inserts + '\n';
+       };
+
+       sql += generateInserts('profiles', profiles || []);
+       sql += generateInserts('student_validations', studentValidations || []);
+       sql += generateInserts('batch_students', batchStudents || []);
+
+       // Save backup record
+       const { error: insertError } = await supabaseAdmin.from('system_backups').insert({
+         admin_name,
+         admin_id
+       });
+       
+       if (insertError) {
+         console.warn("Could not save backup record, table might be missing:", insertError);
+       }
+
+       res.json({ sql });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/admin/db-check', async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client missing' });
     
@@ -628,6 +694,17 @@ ALTER TABLE public.student_validations ALTER COLUMN validated_by TYPE TEXT USING
         dbReport.needsSync = true;
         sqlToRun.push(`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'admin' AND email IS NULL;`);
+      }
+
+      const { error: backupError } = await supabaseAdmin.from('system_backups').select('id').limit(1);
+      if (backupError && (backupError.message.includes('relation') || backupError.message.includes('exist') || backupError.message.includes('Could not find the table'))) {
+        dbReport.needsSync = true;
+        sqlToRun.push(`CREATE TABLE IF NOT EXISTS public.system_backups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_name TEXT NOT NULL,
+  admin_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);`);
       }
 
       dbReport.sql = sqlToRun.join('\n\n');
