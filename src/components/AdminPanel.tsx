@@ -312,16 +312,17 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   };
 
   const filteredValidations = validations.filter(v => 
-    v.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (activeSubTab === 'records' ? v.validated_by === profile?.username : true) &&
+    (v.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.student_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.batch_code.toLowerCase().includes(searchTerm.toLowerCase())
+    v.batch_code.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const batchActivityData = React.useMemo(() => {
     const grouped = new Map<string, any>();
     
-    // First, initialize from allValidations to collect validated_by and latest created_at
-    allValidations.forEach(v => {
+    // Compute purely from deduplicated student_validations (validations)
+    validations.forEach(v => {
       if (!grouped.has(v.batch_code)) {
         grouped.set(v.batch_code, {
           id: v.batch_code,
@@ -329,6 +330,10 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           validated_by: v.validated_by || 'Unknown',
           created_at: v.created_at,
           validatorSet: new Set(v.validated_by ? [v.validated_by] : []),
+          totalSet: new Set([v.student_code]),
+          validatedSet: new Set(
+            (v.status?.toLowerCase() === 'validated' || v.status?.toLowerCase() === 'revalidated') ? [v.student_code] : []
+          ),
           total: 0,
           validated: 0,
           pending: 0,
@@ -336,6 +341,12 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         });
       } else {
         const current = grouped.get(v.batch_code);
+        
+        current.totalSet.add(v.student_code);
+        if (v.status?.toLowerCase() === 'validated' || v.status?.toLowerCase() === 'revalidated') {
+          current.validatedSet.add(v.student_code);
+        }
+
         if (v.validated_by) {
           current.validatorSet.add(v.validated_by);
           current.validated_by = Array.from(current.validatorSet).join(', ');
@@ -347,33 +358,16 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       }
     });
 
-    // Second, ensure all batches from batchStats are included and have correct numbers
-    Object.keys(batchStats).forEach(code => {
-      const bs = batchStats[code];
-      if (!grouped.has(code)) {
-        grouped.set(code, {
-          id: code,
-          batch_code: code,
-          status: bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial",
-          total: bs.total,
-          validated: bs.validated,
-          pending: bs.pending,
-          validated_by: 'System',
-          created_at: new Date().toISOString(),
-        });
-      } else {
-        const current = grouped.get(code);
-        current.total = bs.total;
-        current.validated = bs.validated;
-        current.pending = bs.pending;
-        current.status = bs.total > 0 && bs.pending === 0 ? "Completed" : "Partial";
-      }
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => 
+    return Array.from(grouped.values()).map(g => {
+      g.total = g.totalSet.size;
+      g.validated = g.validatedSet.size;
+      g.pending = Math.max(0, g.total - g.validated);
+      g.status = g.total > 0 && g.pending === 0 ? "Completed" : "Partial";
+      return g;
+    }).sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [allValidations, batchStats]);
+  }, [validations]);
 
   const filteredBatchActivities = batchActivityData.filter(v => 
     v.batch_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
