@@ -201,38 +201,44 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     });
   };
 
-  const handleExportExcel = (data: any[] = validations, prefix = 'Validations') => {
-    const mappedData = getMappedDataForExport(data, prefix);
+  const handleExportExcel = (data?: any | any[], prefix?: any) => {
+    const exportData = Array.isArray(data) ? data : validations;
+    const exportPrefix = typeof prefix === 'string' ? prefix : 'Validations';
+    const mappedData = getMappedDataForExport(exportData, exportPrefix);
     const ws = XLSX.utils.json_to_sheet(mappedData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Data");
-    XLSX.writeFile(wb, `${prefix}_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `${exportPrefix}_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const handleExportCSV = (data: any[] = validations, prefix = 'Validations') => {
-    const mappedData = getMappedDataForExport(data, prefix);
+  const handleExportCSV = (data?: any | any[], prefix?: any) => {
+    const exportData = Array.isArray(data) ? data : validations;
+    const exportPrefix = typeof prefix === 'string' ? prefix : 'Validations';
+    const mappedData = getMappedDataForExport(exportData, exportPrefix);
     const ws = XLSX.utils.json_to_sheet(mappedData);
     const csv = XLSX.utils.sheet_to_csv(ws);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `${prefix}_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `${exportPrefix}_Export_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleExportPDF = (data: any[] = validations, prefix = 'Validations') => {
+  const handleExportPDF = (data?: any | any[], prefix?: any) => {
+    const exportData = Array.isArray(data) ? data : validations;
+    const exportPrefix = typeof prefix === 'string' ? prefix : 'Validations';
     const doc = new jsPDF('l', 'pt');
     
     let head = [['Code', 'Name', 'Batch', 'Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']];
     let bodyData: any[] = [];
     
-    if (prefix === 'User_Activity') {
+    if (exportPrefix === 'User_Activity') {
       head = [['Batch Code', 'Validation Status', 'Total no. of Student', 'No. of Validation', 'No. of Pending', 'Validated By', 'Latest Timestamp']];
-      bodyData = data.map(v => {
+      bodyData = exportData.map(v => {
         const d = new Date(v.created_at || new Date());
         const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         return [
@@ -240,7 +246,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         ];
       });
     } else {
-      bodyData = data.map(v => [
+      bodyData = exportData.map(v => [
         v.student_code, v.student_name, v.batch_code, v.status, v.aligned_ae || v.ae_name || 'N/A', v.validated_by, formatDate(v.created_at!)
       ]);
     }
@@ -252,7 +258,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       headStyles: { fillStyle: '#8b5cf6' }
     });
     
-    doc.save(`${prefix}_Export_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`${exportPrefix}_Export_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -678,10 +684,10 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 />
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={handleExportExcel} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-emerald-100 text-emerald-600 hover:bg-emerald-50">
+                <button onClick={() => handleExportExcel(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-emerald-100 text-emerald-600 hover:bg-emerald-50">
                   <TableIcon size={16} /> Excel
                 </button>
-                <button onClick={handleExportPDF} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-red-100 text-red-600 hover:bg-red-50">
+                <button onClick={() => handleExportPDF(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-red-100 text-red-600 hover:bg-red-50">
                   <Download size={16} /> PDF
                 </button>
                 <button onClick={fetchData} className="p-3 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm">
