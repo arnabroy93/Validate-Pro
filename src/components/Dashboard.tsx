@@ -566,7 +566,11 @@ export function Dashboard() {
                   <p className="text-xs uppercase opacity-80 font-bold tracking-[0.1em]">Batch Statistics</p>
                   <h3 className="text-2xl font-black mt-1 tracking-tight">{selectedBatch}</h3>
                 </div>
-                <div className="flex gap-12">
+                <div className="flex gap-8 lg:gap-12 flex-wrap justify-end">
+                  <div className="text-right">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Start Date</p>
+                    <p className="font-bold text-xl">{filteredStudents[0]?.batch_start_date || 'N/A'}</p>
+                  </div>
                   <div className="text-right">
                     <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Total Students</p>
                     <p className="font-bold text-xl">{filteredStudents.length}</p>
