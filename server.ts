@@ -64,6 +64,11 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS mic_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS video_on BOOLEAN DEFAULT false;`;
 
+    // Ensure batch_students has batch_start_date
+    try {
+      await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS batch_start_date TEXT;`;
+    } catch(e) {}
+    
     // 3. Permissions & RLS
     await sql`ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;`;
     await sql`ALTER TABLE public.student_validations ENABLE ROW LEVEL SECURITY;`;
@@ -652,6 +657,19 @@ export const app = express();
         try {
           await globalSql`SELECT 1`;
           dbReport.postgresDirect = 'working';
+          
+          try {
+            const sizeRes = await globalSql`SELECT pg_database_size(current_database()) as size_bytes`;
+            if (sizeRes && sizeRes.length > 0) {
+              const bytes = Number(sizeRes[0].size_bytes);
+              dbReport.dbSizeBytes = bytes;
+              dbReport.dbSizePretty = (bytes / 1024 / 1024).toFixed(2) + ' MB';
+              // Default Supabase free tier size is 500MB
+              dbReport.dbAvailableBytes = 500 * 1024 * 1024; // 500MB total size threshold
+            }
+          } catch (e) {
+            console.error('Failed to get database size', e);
+          }
         } catch (pgErr: any) {
           dbReport.postgresDirect = 'failed';
           dbReport.healthy = false;
@@ -728,7 +746,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       while (hasMore) {
         const { data, error } = await supabaseAdmin
           .from('batch_students')
-          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, created_at')
+          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, created_at')
           .order('id', { ascending: false })
           .range(from, from + limit - 1);
 

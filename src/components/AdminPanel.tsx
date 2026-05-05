@@ -14,11 +14,13 @@ import {
   ShieldAlert,
   Loader2,
   Cloud,
-  Database
+  Database,
+  Server,
+  HardDrive
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { cn, formatDate } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,8 +38,12 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     sql?: string, 
     supabaseApi?: string,
     postgresDirect?: string,
-    details?: string[]
+    details?: string[],
+    dbSizeBytes?: number,
+    dbSizePretty?: string,
+    dbAvailableBytes?: number,
   } | null>(null);
+  const [pingStatus, setPingStatus] = useState<number | null>(null);
   const [lastBackup, setLastBackup] = useState<any>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   
@@ -57,7 +63,19 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     fetchData();
     checkDbHealth();
     fetchLastBackup();
-  }, []);
+    
+    let interval: number;
+    // Set up polling for health check when active
+    if (activeSubTab === 'health') {
+      interval = window.setInterval(() => {
+        checkDbHealth();
+      }, 5000); // 5 seconds real-time update
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeSubTab]);
 
   const fetchLastBackup = async () => {
     try {
@@ -99,12 +117,26 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
 
   const checkDbHealth = async () => {
     try {
+      const startTime = Date.now();
       const res = await fetch('/api/admin/db-check');
-      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) throw new Error('DB check failed');
+      const endTime = Date.now();
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) {
+        throw new Error('DB check failed');
+      }
       const data = await res.json();
       setDbStatus(data);
+      setPingStatus(endTime - startTime);
     } catch (e) {
       console.error('DB check failed', e);
+      setPingStatus(null);
+      // Fallback state if the backend server is dead and cannot be reached
+      setDbStatus(prev => ({
+        ...(prev || {}),
+        healthy: false,
+        supabaseApi: 'server_down',
+        postgresDirect: 'server_down',
+        details: ['Connection to Node.js Backend Server failed. Refresh or restart server.']
+      }));
     }
   };
 
@@ -247,11 +279,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       });
     } else {
       bodyData = exportData.map(v => [
-        v.student_code, v.student_name, v.batch_code, v.status, v.aligned_ae || v.ae_name || 'N/A', v.validated_by, formatDate(v.created_at!)
+        v.student_code, v.student_name, v.batch_code, v.status, v.aligned_ae || v.ae_name || 'N/A', v.validated_by, v.created_at ? formatDate(v.created_at) : 'N/A'
       ]);
     }
     
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: head,
       body: bodyData,
       theme: 'grid',
@@ -320,7 +352,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   };
 
   const filteredValidations = validations.filter(v => 
-    (activeSubTab === 'records' ? v.validated_by === profile?.username : true) &&
+    (activeSubTab === 'records' ? v.validated_by?.toLowerCase().trim() === profile?.username?.toLowerCase().trim() : true) &&
     (v.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.student_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.batch_code.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -435,7 +467,31 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             className="space-y-6"
           >
             {/* Database Health Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className={cn(
+                "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm bg-white",
+                pingStatus !== null ? "border-emerald-100" : "border-red-100"
+              )}>
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner",
+                    pingStatus !== null ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                  )}>
+                    <Server size={24} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Node Server</p>
+                    <p className={cn(
+                      "text-lg font-bold",
+                      pingStatus !== null ? "text-emerald-700" : "text-red-700"
+                    )}>
+                      {pingStatus !== null ? `${pingStatus}ms latency` : 'Offline'}
+                    </p>
+                  </div>
+                </div>
+                {pingStatus !== null && <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />}
+              </div>
+
               <div className={cn(
                 "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm bg-white",
                 dbStatus?.supabaseApi === 'working' ? "border-emerald-100" : "border-red-100"
@@ -460,33 +516,63 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 {dbStatus?.supabaseApi === 'working' && <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />}
               </div>
 
-              {/* SQL Backup Node */}
-              <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col justify-between">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-slate-50 text-slate-600">
-                      <Database size={24} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800">SQL Database Backup</h3>
-                      <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Export entire backend as SQL sequence</p>
-                    </div>
+              {/* Database Storage Stats */}
+              <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col justify-center">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-brand-light text-brand-primary">
+                    <HardDrive size={24} />
                   </div>
-                  <button 
-                    onClick={handleExportSql} 
-                    disabled={backupLoading}
-                    className="btn-primary py-2 px-4 shadow-sm text-xs flex items-center gap-2 mt-1 whitespace-nowrap"
-                  >
-                    {backupLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                    Export SQL
-                  </button>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-500">
-                  {lastBackup ? (
-                    <div className="flex justify-between items-center">
-                      <span><strong>Last Backup:</strong> {formatDate(lastBackup.created_at)}</span>
-                      <span><strong>By:</strong> {lastBackup.admin_name}</span>
+                  <div className="flex-1 w-full">
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Database Storage</p>
+                      <span className="text-xs font-bold text-slate-700">
+                        {dbStatus?.dbSizePretty || 
+                          (dbStatus?.postgresDirect === 'failed' ? 'Unavailable (DB Auth Error)' : 
+                           dbStatus?.postgresDirect === 'missing_env_var_or_failed' ? 'Unavailable (No DB URL)' : 
+                           'Loading...')}
+                      </span>
                     </div>
+                    {dbStatus?.dbSizeBytes && (
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className={cn("h-full rounded-full transition-all duration-1000", (dbStatus.dbSizeBytes / (dbStatus.dbAvailableBytes || 500 * 1024 * 1024)) > 0.8 ? "bg-red-500" : "bg-emerald-400")} 
+                          style={{ width: `${Math.min(100, Math.max(0, (dbStatus.dbSizeBytes / (dbStatus.dbAvailableBytes || 500 * 1024 * 1024)) * 100))}%` }}
+                        />
+                      </div>
+                    )}
+                    {dbStatus?.dbAvailableBytes && (
+                      <p className="text-[9px] text-right text-slate-400 uppercase mt-1 tracking-wider whitespace-nowrap">
+                        <span className="font-bold">{(dbStatus.dbAvailableBytes / 1024 / 1024).toFixed(0)} MB</span> total space
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SQL Backup Node */}
+            <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-slate-50 text-slate-600">
+                  <Database size={24} />
+                </div>
+                <div className="text-center md:text-left">
+                  <h3 className="font-bold text-slate-800">SQL Database Backup</h3>
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Export entire backend as SQL sequence to free up space</p>
+                </div>
+              </div>
+              <div className="flex flex-col items-center md:items-end w-full md:w-auto">
+                <button 
+                  onClick={handleExportSql} 
+                  disabled={backupLoading}
+                  className="btn-primary py-2 px-6 shadow-sm text-sm flex items-center gap-2 mb-2 w-full md:w-auto justify-center"
+                >
+                  {backupLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  Export Complete SQL Database
+                </button>
+                <div className="bg-slate-50 p-2 px-4 rounded-xl border border-slate-100 text-xs text-slate-500 w-full text-center">
+                  {lastBackup ? (
+                    <span>Last backup: <strong className="text-slate-700">{formatDate(lastBackup.created_at)}</strong> by {lastBackup.admin_name}</span>
                   ) : (
                     <span>No previous SQL backups.</span>
                   )}

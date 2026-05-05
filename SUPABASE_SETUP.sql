@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.batch_students (
   father_name TEXT,
   address TEXT,
   batch_status TEXT,
+  batch_start_date TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   uploaded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
 );

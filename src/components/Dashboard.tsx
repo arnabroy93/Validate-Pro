@@ -159,6 +159,7 @@ export function Dashboard() {
             father_name: normalized['fathername'] || '',
             address: normalized['address'] || '',
             batch_status: normalized['batchstatus'] || '',
+            batch_start_date: normalized['batchstartdate'] ? String(normalized['batchstartdate']) : '',
             uploaded_by: user?.id
           };
         });
