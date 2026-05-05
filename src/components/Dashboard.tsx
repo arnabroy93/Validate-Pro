@@ -134,7 +134,7 @@ export function Dashboard() {
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const jsonData = XLSX.utils.sheet_to_json<any>(ws);
+        const jsonData = XLSX.utils.sheet_to_json<any>(ws, { raw: false, defval: '' });
         
         // Normalize headers and values - remove spaces/special chars and lowercase
         const normalizedData: BatchStudent[] = jsonData.map(row => {
@@ -159,7 +159,7 @@ export function Dashboard() {
             father_name: normalized['fathername'] || '',
             address: normalized['address'] || '',
             batch_status: normalized['batchstatus'] || '',
-            batch_start_date: normalized['batchstartdate'] ? String(normalized['batchstartdate']) : '',
+            batch_start_date: (normalized['batchstartdate'] || normalized['startdate']) ? String(normalized['batchstartdate'] || normalized['startdate']) : '',
             uploaded_by: user?.id
           };
         });
@@ -178,7 +178,7 @@ export function Dashboard() {
             const batchChunk = importedBatchCodes.slice(i, i + chunkSize);
             const { data: bData, error: fetchErr } = await supabase
               .from('batch_students')
-              .select('student_code, batch_code, center_code')
+              .select('id, student_code, batch_code, center_code, batch_start_date')
               .in('batch_code', batchChunk);
               
             if (fetchErr) throw new Error(fetchErr.message);
@@ -187,9 +187,12 @@ export function Dashboard() {
             }
           }
 
-          const existingSet = new Set((existingData || []).map(r => 
-            String(`${r.center_code}_${r.batch_code}_${r.student_code}`).toLowerCase().trim()
-          ));
+          const existingMap = new Map();
+          (existingData || []).forEach(r => {
+            const key = String(`${r.center_code}_${r.batch_code}_${r.student_code}`).toLowerCase().trim();
+            existingMap.set(key, r);
+          });
+          const existingSet = new Set(existingMap.keys());
 
           const uniqueNewRecordsSet = new Set();
           const newRecordsToInsert = normalizedData.filter(newRow => {
@@ -200,16 +203,51 @@ export function Dashboard() {
             uniqueNewRecordsSet.add(key);
             return true;
           });
+          
+          const recordsToUpdate = normalizedData.filter(newRow => {
+             const key = String(`${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`).toLowerCase().trim();
+             if (existingSet.has(key)) {
+                 const existingRecord = existingMap.get(key);
+                 // Only update if start date is provided and different
+                 if (newRow.batch_start_date && existingRecord.batch_start_date !== newRow.batch_start_date) {
+                     return true;
+                 }
+             }
+             return false;
+          }).map(newRow => {
+             const key = String(`${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`).toLowerCase().trim();
+             const existingRecord = existingMap.get(key);
+             return {
+                 id: existingRecord.id,
+                 batch_start_date: newRow.batch_start_date
+             };
+          });
 
-          if (newRecordsToInsert.length === 0) {
-             toast.success('No new records to insert. All data already exists.');
-          } else {
+          let insertCount = 0;
+          let updateCount = 0;
+
+          if (newRecordsToInsert.length > 0) {
              const { error } = await supabase.from('batch_students').insert(newRecordsToInsert);
              if (error) {
                console.error('Supabase error inserting batch data:', error);
                throw new Error(error.message);
              }
-             toast.success(`Successfully added ${newRecordsToInsert.length} new records!`);
+             insertCount = newRecordsToInsert.length;
+          }
+          
+          if (recordsToUpdate.length > 0) {
+             const { error } = await supabase.from('batch_students').upsert(recordsToUpdate, { onConflict: 'id' });
+             if (error) {
+               console.error('Supabase error updating batch data:', error);
+               throw new Error(error.message);
+             }
+             updateCount = recordsToUpdate.length;
+          }
+
+          if (insertCount === 0 && updateCount === 0) {
+             toast.success('No new records to insert and no dates to update. Data already up to date.');
+          } else {
+             toast.success(`Successfully added ${insertCount} records and updated dates for ${updateCount} records!`);
              fetchBatchStudents(); // Refresh data
           }
         } else {
