@@ -149,17 +149,19 @@ export function Dashboard() {
           });
           
           return {
-            ae_name: normalized['aename'] || '',
-            center_code: normalized['centercode'] || '',
-            batch_code: normalized['batchcode'] || '',
-            student_code: normalized['studentcode'] || '',
-            student_name: normalized['studentname'] || '',
-            mobile_no: normalized['mobileno'] || '',
-            dob: normalized['dob'] ? String(normalized['dob']) : '',
-            father_name: normalized['fathername'] || '',
+            ae_name: normalized['aename'] || normalized['alignedaename'] || normalized['alignedae'] || '',
+            center_code: normalized['centercode'] || normalized['center'] || '',
+            batch_code: normalized['batchcode'] || normalized['batch'] || '',
+            student_code: normalized['studentcode'] || normalized['code'] || '',
+            student_name: normalized['studentname'] || normalized['name'] || '',
+            mobile_no: normalized['mobileno'] || normalized['mobile'] || normalized['phoneno'] || normalized['phone'] || '',
+            dob: (normalized['dob'] || normalized['dateofbirth']) ? String(normalized['dob'] || normalized['dateofbirth']) : '',
+            father_name: normalized['fathername'] || normalized['fathersname'] || '',
             address: normalized['address'] || '',
-            batch_status: normalized['batchstatus'] || '',
+            batch_status: normalized['batchstatus'] || normalized['status'] || '',
             batch_start_date: (normalized['batchstartdate'] || normalized['startdate']) ? String(normalized['batchstartdate'] || normalized['startdate']) : '',
+            program_name: normalized['programname'] || normalized['program'] || '',
+            education_qualification: normalized['educationqualification'] || normalized['qualification'] || normalized['highestqualification'] || '',
             uploaded_by: user?.id
           };
         });
@@ -178,7 +180,7 @@ export function Dashboard() {
             const batchChunk = importedBatchCodes.slice(i, i + chunkSize);
             const { data: bData, error: fetchErr } = await supabase
               .from('batch_students')
-              .select('id, student_code, batch_code, center_code, batch_start_date')
+              .select('id, student_code, batch_code, center_code, batch_start_date, program_name, education_qualification, student_name, mobile_no, dob, father_name, address, batch_status, ae_name')
               .in('batch_code', batchChunk);
               
             if (fetchErr) throw new Error(fetchErr.message);
@@ -208,10 +210,16 @@ export function Dashboard() {
              const key = String(`${newRow.center_code}_${newRow.batch_code}_${newRow.student_code}`).toLowerCase().trim();
              if (existingSet.has(key)) {
                  const existingRecord = existingMap.get(key);
-                 // Only update if start date is provided and different
-                 if (newRow.batch_start_date && existingRecord.batch_start_date !== newRow.batch_start_date) {
-                     return true;
-                 }
+                 if (newRow.batch_start_date && existingRecord.batch_start_date !== newRow.batch_start_date) return true;
+                 if (newRow.program_name && existingRecord.program_name !== newRow.program_name) return true;
+                 if (newRow.education_qualification && existingRecord.education_qualification !== newRow.education_qualification) return true;
+                 if (newRow.student_name && existingRecord.student_name !== newRow.student_name) return true;
+                 if (newRow.mobile_no && existingRecord.mobile_no !== newRow.mobile_no) return true;
+                 if (newRow.dob && existingRecord.dob !== newRow.dob) return true;
+                 if (newRow.father_name && existingRecord.father_name !== newRow.father_name) return true;
+                 if (newRow.address && existingRecord.address !== newRow.address) return true;
+                 if (newRow.batch_status && existingRecord.batch_status !== newRow.batch_status) return true;
+                 if (newRow.ae_name && existingRecord.ae_name !== newRow.ae_name) return true;
              }
              return false;
           }).map(newRow => {
@@ -219,7 +227,16 @@ export function Dashboard() {
              const existingRecord = existingMap.get(key);
              return {
                  id: existingRecord.id,
-                 batch_start_date: newRow.batch_start_date
+                 batch_start_date: newRow.batch_start_date || existingRecord.batch_start_date,
+                 program_name: newRow.program_name || existingRecord.program_name,
+                 education_qualification: newRow.education_qualification || existingRecord.education_qualification,
+                 student_name: newRow.student_name || existingRecord.student_name,
+                 mobile_no: newRow.mobile_no || existingRecord.mobile_no,
+                 dob: newRow.dob || existingRecord.dob,
+                 father_name: newRow.father_name || existingRecord.father_name,
+                 address: newRow.address || existingRecord.address,
+                 batch_status: newRow.batch_status || existingRecord.batch_status,
+                 ae_name: newRow.ae_name || existingRecord.ae_name
              };
           });
 
@@ -606,6 +623,10 @@ export function Dashboard() {
                 </div>
                 <div className="flex gap-8 lg:gap-12 flex-wrap justify-end">
                   <div className="text-right">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Program Name</p>
+                    <p className="font-bold text-xl truncate max-w-[200px]" title={filteredStudents[0]?.program_name || 'N/A'}>{filteredStudents[0]?.program_name || 'N/A'}</p>
+                  </div>
+                  <div className="text-right">
                     <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Start Date</p>
                     <p className="font-bold text-xl">{filteredStudents[0]?.batch_start_date || 'N/A'}</p>
                   </div>
@@ -675,6 +696,9 @@ export function Dashboard() {
                                 </p>
                                 <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
                                   <span className="opacity-60 text-[8px] uppercase">DOB:</span> {student.dob ? String(student.dob) : 'N/A'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1" title={student.education_qualification || 'N/A'}>
+                                  <span className="opacity-60 text-[8px] uppercase">Edu:</span> <span className="truncate max-w-[150px]">{student.education_qualification || 'N/A'}</span>
                                 </p>
                                 <p className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] flex items-center gap-1" title={student.address}>
                                   <span className="opacity-60 text-[8px] uppercase">Addr:</span> {student.address || 'N/A'}

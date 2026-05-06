@@ -30,6 +30,7 @@ interface BatchSummary {
   assigned_ae: string;
   validated_by: string;
   batch_start_date: string;
+  program_name: string;
 }
 
 const calculateDaysSince = (startDateStr: string) => {
@@ -143,6 +144,7 @@ export function ReportPanel() {
             assigned_ae: student.ae_name || '',
             validated_by: '',
             batch_start_date: student.batch_start_date || '',
+            program_name: student.program_name || '',
             validatorSet: new Set()
           });
         }
@@ -180,6 +182,8 @@ export function ReportPanel() {
             center_code: validationRow?.center_code || student.center_code,
             batch_code: validationRow?.batch_code || student.batch_code,
             batch_start_date: student.batch_start_date || '',
+            program_name: student.program_name || '',
+            education_qualification: student.education_qualification || '',
             ae_name: validationRow?.aligned_ae || validationRow?.ae_name || student.aligned_ae || student.ae_name || '',
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
@@ -207,6 +211,8 @@ export function ReportPanel() {
       'Student Name': v.student_name,
       'Batch Code': v.batch_code,
       'Center Code': v.center_code,
+      'Program Name': v.program_name || 'N/A',
+      'Education Qualification': v.education_qualification || 'N/A',
       'Batch Start Date': v.batch_start_date || 'N/A',
       'Days Since Batch Start': calculateDaysSince(v.batch_start_date),
       'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
@@ -243,14 +249,14 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillStyle: '#0d9488' }
+      headStyles: { fillColor: '#0d9488' }
     });
     
     doc.save(`${fileName}_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -286,6 +292,7 @@ export function ReportPanel() {
       .map(s => ({
         'Center Code': s.center_code,
         'Batch Code': s.batch_code,
+        'Program Name': s.program_name || 'N/A',
         'Batch Start Date': s.batch_start_date || 'N/A',
         'Days Since Batch Start': calculateDaysSince(s.batch_start_date),
         'Total Students': s.total_students,
@@ -314,6 +321,7 @@ export function ReportPanel() {
       .map(s => ({
         'Center Code': s.center_code,
         'Batch Code': s.batch_code,
+        'Program Name': s.program_name || 'N/A',
         'Batch Start Date': s.batch_start_date || 'N/A',
         'Days Since Batch Start': calculateDaysSince(s.batch_start_date),
         'Total Students': s.total_students,
@@ -347,14 +355,14 @@ export function ReportPanel() {
     const dataToExport = summaryData.filter(s => selectedBatchesForExport.has(s.batch_code));
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(s => [
-      s.center_code, s.batch_code, s.batch_start_date || 'N/A', calculateDaysSince(s.batch_start_date), s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), s.assigned_ae, s.validated_by, formatDate(s.latest_timestamp)
+      s.center_code, s.batch_code, s.program_name || 'N/A', s.batch_start_date || 'N/A', calculateDaysSince(s.batch_start_date), s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), s.assigned_ae, s.validated_by, formatDate(s.latest_timestamp)
     ]);
     
     (doc as any).autoTable({
-      head: [['Center Code', 'Batch Code', 'Batch Start Date', 'Days Since Start', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Center Code', 'Batch Code', 'Program Name', 'Batch Start Date', 'Days Since Start', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillStyle: '#0d9488' }
+      headStyles: { fillColor: '#0d9488' }
     });
     
     doc.save(`Batch_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -454,6 +462,7 @@ export function ReportPanel() {
                   </th>
                   <th className="px-6 py-5">Center Code</th>
                   <th className="px-6 py-5">Batch Code</th>
+                  <th className="px-6 py-5">Program Name</th>
                   <th className="px-6 py-5">Batch Start Date</th>
                   <th className="px-6 py-5">Days Since Start</th>
                   <th className="px-6 py-5">Total Students</th>
@@ -485,6 +494,9 @@ export function ReportPanel() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-bold text-slate-600 text-sm mb-0.5">{s.batch_code}</span>
+                      </td>
+                      <td className="px-6 py-4 max-w-[150px] truncate" title={s.program_name || 'N/A'}>
+                        <span className="font-bold text-slate-600 text-xs mb-0.5">{s.program_name || 'N/A'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-bold text-slate-600 text-sm mb-0.5">{s.batch_start_date || 'N/A'}</span>
@@ -593,6 +605,8 @@ export function ReportPanel() {
                           <th className="px-6 py-4">Student Name</th>
                           <th className="px-6 py-4">Batch Code</th>
                           <th className="px-6 py-4">Center Code</th>
+                          <th className="px-6 py-4">Program Name</th>
+                          <th className="px-6 py-4">Education Qual.</th>
                           <th className="px-6 py-4">Batch Start Date</th>
                           <th className="px-6 py-4">Days Since Start</th>
                           <th className="px-6 py-4">Mic</th>
@@ -618,6 +632,12 @@ export function ReportPanel() {
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className="font-bold text-[10px] uppercase tracking-widest text-brand-primary">{v.center_code}</span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap max-w-[150px] truncate" title={v.program_name || 'N/A'}>
+                            <span className="font-bold text-slate-600 text-[10px] block">{v.program_name || 'N/A'}</span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap max-w-[150px] truncate" title={v.education_qualification || 'N/A'}>
+                            <span className="font-bold text-slate-600 text-[10px] block">{v.education_qualification || 'N/A'}</span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className="font-bold text-slate-600 text-[10px] block">{v.batch_start_date || 'N/A'}</span>

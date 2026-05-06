@@ -64,9 +64,11 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS mic_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS video_on BOOLEAN DEFAULT false;`;
 
-    // Ensure batch_students has batch_start_date
+    // Ensure batch_students has batch_start_date, program_name, education_qualification
     try {
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS batch_start_date TEXT;`;
+      await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS program_name TEXT;`;
+      await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS education_qualification TEXT;`;
     } catch(e) {}
     
     // 3. Permissions & RLS
@@ -746,7 +748,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       while (hasMore) {
         const { data, error } = await supabaseAdmin
           .from('batch_students')
-          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, created_at')
+          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
           .order('id', { ascending: false })
           .range(from, from + limit - 1);
 
@@ -903,7 +905,7 @@ async function setupServer() {
 
   // Only listen to port if not running in Vercel. Vercel provides process.env.VERCEL
   if (!process.env.VERCEL) {
-    const PORT = process.env.PORT || 3000;
+    const PORT = Number(process.env.PORT) || 3000;
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });

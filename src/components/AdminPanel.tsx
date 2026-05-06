@@ -287,7 +287,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       head: head,
       body: bodyData,
       theme: 'grid',
-      headStyles: { fillStyle: '#8b5cf6' }
+      headStyles: { fillColor: '#8b5cf6' }
     });
     
     doc.save(`${exportPrefix}_Export_${new Date().toISOString().split('T')[0]}.pdf`);
