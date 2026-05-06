@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase, StudentValidation } from '../../supabase';
 import { toast } from 'react-hot-toast';
 import { 
@@ -52,6 +52,7 @@ export function ReportPanel() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [programFilter, setProgramFilter] = useState<string>('All');
   const [summaryData, setSummaryData] = useState<BatchSummary[]>([]);
   
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
@@ -262,12 +263,24 @@ export function ReportPanel() {
     doc.save(`${fileName}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
+  const uniquePrograms = useMemo(() => {
+    const programs = new Set<string>();
+    summaryData.forEach(s => {
+      if (s.program_name) {
+        programs.add(s.program_name);
+      }
+    });
+    return Array.from(programs).sort();
+  }, [summaryData]);
+
   const filteredSummary = summaryData.filter(s => {
     const matchesSearch = s.center_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           s.batch_code.toLowerCase().includes(searchTerm.toLowerCase());
                           
     if (!matchesSearch) return false;
     
+    if (programFilter !== 'All' && s.program_name !== programFilter) return false;
+
     if (statusFilter === 'All') return true;
     if (statusFilter === 'Validated') return s.validated > 0;
     if (statusFilter === 'ReValidated') return s.revalidated > 0;
@@ -411,6 +424,16 @@ export function ReportPanel() {
                 className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
               />
             </div>
+            <select
+              value={programFilter}
+              onChange={(e) => setProgramFilter(e.target.value)}
+              className="bg-white border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
+            >
+              <option value="All">All Programs</option>
+              {uniquePrograms.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
