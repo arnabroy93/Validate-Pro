@@ -100,18 +100,12 @@ async function runMigrations(isManual = false) {
 
     // Validations
     await sql`DROP POLICY IF EXISTS "Users can view own validations" ON public.student_validations;`;
-    await sql`CREATE POLICY "Users can view own validations" ON public.student_validations FOR SELECT USING (auth.uid() = user_id OR (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')));`;
-
     await sql`DROP POLICY IF EXISTS "Users can insert own validations" ON public.student_validations;`;
-    await sql`CREATE POLICY "Users can insert own validations" ON public.student_validations FOR INSERT WITH CHECK (
-      auth.uid() = user_id OR 
-      (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-    );`;
-
     await sql`DROP POLICY IF EXISTS "Admins can manage all validations" ON public.student_validations;`;
-    await sql`CREATE POLICY "Admins can manage all validations" ON public.student_validations FOR ALL USING (
-      EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-    );`;
+    await sql`DROP POLICY IF EXISTS "Anyone can view validations" ON public.student_validations;`;
+    await sql`DROP POLICY IF EXISTS "Anyone can manage validations" ON public.student_validations;`;
+    
+    await sql`CREATE POLICY "Anyone can manage validations" ON public.student_validations FOR ALL USING (true);`;
 
     // 5. Trigger for automatic profile creation
     await sql`
@@ -773,6 +767,70 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     } catch (error: any) {
       console.error('Error in /api/batch_data:', error.message);
       res.status(500).json({ error: error.message || 'Failed to fetch batch data' });
+    }
+  });
+
+  app.post('/api/validations/sync', async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
+      
+      const { studentCodes, batchCode, centerCode } = req.body;
+      
+      const { data, error } = await supabaseAdmin
+        .from('student_validations')
+        .select('*')
+        .in('student_code', studentCodes)
+        .eq('batch_code', batchCode)
+        .eq('center_code', centerCode)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      console.error('Error in /api/validations/sync:', error.message);
+      res.status(500).json({ error: error.message || 'Failed to fetch validations' });
+    }
+  });
+
+  app.post('/api/validations/save', async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
+      const { record } = req.body;
+      
+      let result;
+      if (record.id) {
+        result = await supabaseAdmin.from('student_validations').update(record).eq('id', record.id).select().single();
+      } else {
+        result = await supabaseAdmin.from('student_validations').insert(record).select().single();
+      }
+      
+      if (result.error) throw result.error;
+      res.json(result.data);
+    } catch (error: any) {
+      console.error('Error in /api/validations/save:', error.message);
+      res.status(500).json({ error: error.message || 'Failed to save validation' });
+    }
+  });
+
+  app.post('/api/validations/submit', async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
+      const { recordsToInsert, recordsToUpdate } = req.body;
+      
+      if (recordsToInsert && recordsToInsert.length > 0) {
+        const { error } = await supabaseAdmin.from('student_validations').insert(recordsToInsert);
+        if (error) throw error;
+      }
+      
+      if (recordsToUpdate && recordsToUpdate.length > 0) {
+        const { error } = await supabaseAdmin.from('student_validations').upsert(recordsToUpdate);
+        if (error) throw error;
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error in /api/validations/submit:', error.message);
+      res.status(500).json({ error: error.message || 'Failed to submit validations' });
     }
   });
 

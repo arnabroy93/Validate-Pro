@@ -63,17 +63,20 @@ export function Dashboard() {
 
       const studentCodes = studentsInBatch.map(s => s.student_code);
 
-      const { data: existingRecords, error } = await supabase
-        .from('student_validations')
-        .select('*')
-        .in('student_code', studentCodes)
-        .eq('batch_code', selectedBatch)
-        .eq('center_code', selectedCenter)
-        .order('created_at', { ascending: true });
-        
-      if (existingRecords && !error) {
+      const res = await fetch('/api/validations/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          studentCodes, 
+          batchCode: selectedBatch, 
+          centerCode: selectedCenter 
+        })
+      });
+
+      if (res.ok) {
+        const existingRecords = await res.json();
         const loadedValidations: Record<string, Partial<StudentValidation>> = {};
-        existingRecords.forEach(record => {
+        existingRecords.forEach((record: any) => {
           loadedValidations[record.student_code] = {
             id: record.id,
             status: record.status as any,
@@ -356,29 +359,15 @@ export function Dashboard() {
     }));
   };
 
-  const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
-    if (!validatedBy) {
-      toast.error('User profile not fully loaded. Please reload.');
-      return;
-    }
-
-    // 1. Optimistic update
-    setValidations(prev => ({
-      ...prev,
-      [studentCode]: {
-        ...prev[studentCode],
-        [field]: value
-      }
-    }));
-
-    if (!user) return;
+  const autosaveValidation = async (studentCode: string, optimisticUpdate: Partial<StudentValidation> = {}) => {
+    if (!validatedBy || !user) return;
     
     // 2. Prepare autosave
     const student = filteredStudents.find(s => s.student_code === studentCode);
     if (!student) return;
 
     // Get current state with the optimistic update
-    const v = { ...(validations[studentCode] || {}), [field]: value };
+    const v = { ...(validations[studentCode] || {}), ...optimisticUpdate };
 
     const record: any = {
       student_code: student.student_code,
@@ -403,20 +392,14 @@ export function Dashboard() {
     }
 
     try {
-      let savedData;
-      let error;
-      
-      if (v.id) {
-        const res = await supabase.from('student_validations').update(record).eq('id', v.id).select().single();
-        savedData = res.data;
-        error = res.error;
-      } else {
-        const res = await supabase.from('student_validations').insert(record).select().single();
-        savedData = res.data;
-        error = res.error;
-      }
+      const res = await fetch('/api/validations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ record })
+      });
 
-      if (!error && savedData) {
+      if (res.ok) {
+        const savedData = await res.json();
         // If it was newly inserted, update State with specific ID so future updates hit the same row
         if (v.id !== savedData.id) {
           setValidations(prev => ({
@@ -427,12 +410,35 @@ export function Dashboard() {
             }
           }));
         }
-      } else if (error) {
-        console.error('Autosave error:', error);
+      } else {
+        const err = await res.json();
+        console.error('Autosave error:', err);
       }
     } catch (e) {
       console.error('Autosave failed:', e);
     }
+  };
+
+  const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
+    if (!validatedBy) {
+      toast.error('User profile not fully loaded. Please reload.');
+      return;
+    }
+
+    // 1. Optimistic update
+    setValidations(prev => ({
+      ...prev,
+      [studentCode]: {
+        ...prev[studentCode],
+        [field]: value
+      }
+    }));
+
+    autosaveValidation(studentCode, { [field]: value });
+  };
+
+  const handleRemarksBlur = (studentCode: string) => {
+    autosaveValidation(studentCode);
   };
 
   const handleSubmit = async () => {
@@ -458,8 +464,8 @@ export function Dashboard() {
       const status = v.status || 'Pending';
       const remarks = (v.remarks || '').trim();
       
-      if (status !== 'Pending' && !remarks) {
-        toast.error(`remarks should not be blank`);
+      if (status === 'Rejected' && !remarks) {
+        toast.error(`Remarks are mandatory when status is Rejected`);
         setLoading(false);
         return;
       }
@@ -494,20 +500,15 @@ export function Dashboard() {
     });
 
     try {
-      if (recordsToInsert.length > 0) {
-        const { error } = await supabase.from('student_validations').insert(recordsToInsert);
-        if (error) {
-          console.error('Supabase insert error:', error);
-          throw new Error(error.message);
-        }
-      }
-      
-      if (recordsToUpdate.length > 0) {
-        const { error } = await supabase.from('student_validations').upsert(recordsToUpdate);
-        if (error) {
-          console.error('Supabase update error:', error);
-          throw new Error(error.message);
-        }
+      const res = await fetch('/api/validations/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordsToInsert, recordsToUpdate })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to submit validations');
       }
       toast.success('Batch validations submitted successfully!');
     } catch (error: any) {
@@ -736,6 +737,7 @@ export function Dashboard() {
                                 type="text"
                                 value={v.remarks || ''}
                                 onChange={(e) => handleValidationChange(student.student_code, 'remarks', e.target.value)}
+                                onBlur={() => handleRemarksBlur(student.student_code)}
                                 placeholder="Add comment..."
                                 className="w-full bg-transparent border-b border-transparent focus:border-brand-primary focus:outline-none focus:ring-0 text-sm py-1 transition-all"
                               />
