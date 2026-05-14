@@ -493,11 +493,11 @@ export function ReportPanel() {
         </div>
 
         <div className="glass-card rounded-2xl shadow-lg border border-brand-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-white/40 border-b border-brand-border backdrop-blur-sm">
+          <div className="overflow-auto max-h-[60vh] relative">
+            <table className="w-full text-left relative min-w-max">
+              <thead className="bg-[#f8fafc] border-b border-brand-border sticky top-0 z-20 shadow-sm">
                 <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
-                  <th className="px-6 py-5 w-12 text-center">
+                  <th className="px-6 py-5 w-12 text-center bg-[#f8fafc] sticky top-0">
                     <input 
                       type="checkbox" 
                       className="accent-brand-primary w-4 h-4 cursor-pointer rounded"
@@ -505,21 +505,21 @@ export function ReportPanel() {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="px-6 py-5">Center Code</th>
-                  <th className="px-6 py-5">Batch Code</th>
-                  <th className="px-6 py-5">Program Name</th>
-                  <th className="px-6 py-5">Batch Start Date</th>
-                  <th className="px-6 py-5">Days Since Start</th>
-                  <th className="px-6 py-5">Total Students</th>
-                  <th className="px-6 py-5">Validation</th>
-                  <th className="px-6 py-5">Revalidation</th>
-                  <th className="px-6 py-5">Pending</th>
-                  <th className="px-6 py-5">Absent</th>
-                  <th className="px-6 py-5">Rejected</th>
-                  <th className="px-6 py-5">Aligned AE</th>
-                  <th className="px-6 py-5">Validated By</th>
-                  <th className="px-6 py-5">Latest Timestamp</th>
-                  <th className="px-6 py-5 sticky right-0 bg-white/90 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] backdrop-blur-sm z-10">Actions</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Center Code</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Batch Code</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Program Name</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Batch Start Date</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Days Since Start</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Total Students</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Validation</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Revalidation</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Pending</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Absent</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Rejected</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Aligned AE</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Validated By</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Latest Timestamp</th>
+                  <th className="px-6 py-5 sticky right-0 top-0 bg-[#f8fafc] shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-30">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-divide">
@@ -642,25 +642,25 @@ export function ReportPanel() {
               </div>
               <div className="flex-1 overflow-auto p-6 bg-brand-bg/50">
                 <div className="glass-card rounded-2xl shadow-lg border border-brand-border overflow-hidden">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-auto max-h-[60vh] relative">
                     <table className="w-full text-left relative min-w-max">
-                      <thead className="bg-white/90 border-b border-brand-border backdrop-blur-sm sticky top-0 z-10">
+                      <thead className="bg-[#f8fafc] border-b border-brand-border sticky top-0 z-20 shadow-sm">
                         <tr className="text-brand-text/70 text-[10px] font-black uppercase tracking-widest">
-                          <th className="px-6 py-4">Student Code</th>
-                          <th className="px-6 py-4">Student Name</th>
-                          <th className="px-6 py-4">Batch Code</th>
-                          <th className="px-6 py-4">Center Code</th>
-                          <th className="px-6 py-4">Program Name</th>
-                          <th className="px-6 py-4">Education Qual.</th>
-                          <th className="px-6 py-4">Batch Start Date</th>
-                          <th className="px-6 py-4">Days Since Start</th>
-                          <th className="px-6 py-4">Mic</th>
-                          <th className="px-6 py-4">Camera</th>
-                          <th className="px-6 py-4">Validation Status</th>
-                          <th className="px-6 py-4">Remarks</th>
-                          <th className="px-6 py-4">Aligned AE</th>
-                          <th className="px-6 py-4">Validated By</th>
-                          <th className="px-6 py-4">Latest Timestamp</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Student Code</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Student Name</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Batch Code</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Center Code</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Program Name</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Education Qual.</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Batch Start Date</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Days Since Start</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Mic</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Camera</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Status</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Remarks</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Aligned AE</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validated By</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Latest Timestamp</th>
                         </tr>
                       </thead>
                     <tbody className="divide-y divide-brand-divide">

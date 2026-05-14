@@ -647,8 +647,8 @@ export function Dashboard() {
               </div>
 
               {/* Data Table */}
-              <div className="glass-card shadow-lg">
-                <div className="px-6 py-4 border-b border-brand-border/50 flex items-center bg-white/40 backdrop-blur-sm">
+              <div className="glass-card shadow-lg flex flex-col border border-brand-border">
+                <div className="px-6 py-4 border-b border-brand-border/50 flex items-center bg-white backdrop-blur-sm z-30 relative rounded-t-2xl">
                   <div className="relative w-full max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input 
@@ -656,27 +656,27 @@ export function Dashboard() {
                       placeholder="Search by student code or name..."
                       value={studentSearch}
                       onChange={(e) => setStudentSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 rounded-xl border border-brand-border text-sm outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all"
+                      className="w-full pl-9 pr-4 py-2 rounded-xl border border-brand-border text-sm outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all bg-slate-50"
                     />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-white/40 border-b border-brand-border/50 backdrop-blur-sm">
+                <div className="overflow-auto max-h-[60vh] relative">
+                  <table className="w-full text-left relative">
+                    <thead className="bg-[#f8fafc] border-b border-brand-border/50 sticky top-0 z-20 shadow-sm">
                       <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Student Code</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Student Details</th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Val</th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Re-Val</th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Abs</th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">Rej</th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">
-                          <Mic className="w-3.5 h-3.5 mx-auto" />
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Student Code</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Student Details</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Val</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Re-Val</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Abs</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Rej</th>
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">
+                          <Mic className="w-3.5 h-3.5 mx-auto text-slate-500" />
                         </th>
-                        <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase text-center tracking-wider w-16">
-                          <Video className="w-3.5 h-3.5 mx-auto" />
+                        <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">
+                          <Video className="w-3.5 h-3.5 mx-auto text-slate-500" />
                         </th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Remarks</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Remarks</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-divide">
