@@ -53,6 +53,7 @@ export function ReportPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [programFilter, setProgramFilter] = useState<string>('All');
+  const [validatedByFilter, setValidatedByFilter] = useState<string>('All');
   const [summaryData, setSummaryData] = useState<BatchSummary[]>([]);
   
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
@@ -273,6 +274,16 @@ export function ReportPanel() {
     return Array.from(programs).sort();
   }, [summaryData]);
 
+  const uniqueValidatedBy = useMemo(() => {
+    const users = new Set<string>();
+    summaryData.forEach(s => {
+      if (s.validated_by) {
+        users.add(s.validated_by);
+      }
+    });
+    return Array.from(users).sort();
+  }, [summaryData]);
+
   const filteredSummary = summaryData.filter(s => {
     const matchesSearch = s.center_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           s.batch_code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -280,6 +291,7 @@ export function ReportPanel() {
     if (!matchesSearch) return false;
     
     if (programFilter !== 'All' && s.program_name !== programFilter) return false;
+    if (validatedByFilter !== 'All' && s.validated_by !== validatedByFilter) return false;
 
     if (statusFilter === 'All') return true;
     if (statusFilter === 'Validated') return s.validated > 0;
@@ -412,9 +424,9 @@ export function ReportPanel() {
       </div>
 
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row gap-4 items-center">
-          <div className="relative flex-1 w-full flex items-center gap-4">
-            <div className="relative flex-1 w-full">
+        <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
+          <div className="relative w-full flex flex-wrap items-center gap-4 flex-1">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
@@ -445,6 +457,16 @@ export function ReportPanel() {
               <option value="Pending">Pending</option>
               <option value="Absent">Absent</option>
               <option value="Rejected">Rejected</option>
+            </select>
+            <select
+              value={validatedByFilter}
+              onChange={(e) => setValidatedByFilter(e.target.value)}
+              className="bg-white border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
+            >
+              <option value="All">All Validators</option>
+              {uniqueValidatedBy.map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
             </select>
           </div>
           <div className="flex gap-2 w-full md:w-auto items-center">
