@@ -102,6 +102,36 @@ export function LoginPage() {
     <div className="min-h-screen flex bg-brand-bg relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] opacity-50 pointer-events-none" />
       
+      {/* Animated Background Elements */}
+      <motion.div
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.3, 0.6, 0.3],
+          x: [0, 100, 0],
+          y: [0, -100, 0]
+        }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-[10%] -left-[10%] w-[50vw] h-[50vw] max-w-[40rem] max-h-[40rem] bg-teal-300/40 rounded-full mix-blend-multiply filter blur-[100px] pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.5, 1],
+          opacity: [0.2, 0.5, 0.2],
+          x: [0, -80, 0],
+          y: [0, 80, 0]
+        }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-[20%] -right-[10%] w-[45vw] h-[45vw] max-w-[35rem] max-h-[35rem] bg-emerald-300/40 rounded-full mix-blend-multiply filter blur-[100px] pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.3, 1],
+          opacity: [0.2, 0.5, 0.2]
+        }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -bottom-[20%] left-[20%] w-[60vw] h-[60vw] max-w-[45rem] max-h-[45rem] bg-cyan-300/30 rounded-full mix-blend-multiply filter blur-[120px] pointer-events-none"
+      />
+
       {/* Left Column - Illustration */}
       <div className="hidden lg:flex flex-1 items-center justify-center relative z-10 p-12 lg:pr-6">
         <motion.div 
