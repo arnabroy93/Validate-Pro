@@ -17,7 +17,7 @@ import { ReportPanel } from './components/ReportPanel';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw } from 'lucide-react';
-import { cn } from './utils';
+import { cn, getAvatarUrl } from './utils';
 
 function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const { profile, signOut } = useAuth();
@@ -122,7 +122,7 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
         <div className="flex items-center gap-3 p-3 bg-white/40 rounded-2xl mb-4 border border-white/50 backdrop-blur-md shadow-sm">
           <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-brand-primary/20 shadow-sm bg-brand-light">
             <img 
-              src={`https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(profile?.username || 'user')}&backgroundColor=eef2ff,e0e7ff,c7d2fe`} 
+              src={getAvatarUrl(profile?.username || 'user', profile?.role)} 
               alt={profile?.username || 'User Avatar'}
               className="w-full h-full object-cover"
             />

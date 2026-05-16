@@ -21,7 +21,7 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { cn, formatDate } from '../utils';
+import { cn, formatDate, getAvatarUrl } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' }) {
@@ -702,7 +702,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                               : "border-brand-border bg-slate-50"
                           )}>
                             <img 
-                              src={`https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(u.username || 'user')}&backgroundColor=${u.role === 'admin' ? 'eef2ff,c0aede' : 'f1f5f9,e2e8f0'}`} 
+                              src={getAvatarUrl(u.username || 'user', u.role)} 
                               alt={u.username}
                               className="w-full h-full object-cover relative z-10"
                             />
@@ -845,9 +845,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </td>
                           <td className="px-8 py-5 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center text-[10px] font-black text-brand-hover border border-brand-border shadow-inner">
-                                {v.validated_by?.substring(0, 1).toUpperCase()}
-                              </div>
+                              <img src={getAvatarUrl(v.validated_by || 'system')} alt={v.validated_by || 'system'} className="w-6 h-6 rounded-full border border-brand-border shadow-inner" />
                               <span className="text-[11px] text-slate-600 font-bold">
                                 {v.validated_by === 'Self' ? 'Internal System' : v.validated_by}
                               </span>
@@ -987,9 +985,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </td>
                           <td className="px-6 py-5 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center text-[10px] font-black text-brand-hover border border-brand-border shadow-inner">
-                                {v.validated_by?.substring(0, 1).toUpperCase()}
-                              </div>
+                              <img src={getAvatarUrl(v.validated_by || 'system')} alt={v.validated_by || 'system'} className="w-6 h-6 rounded-full border border-brand-border shadow-inner" />
                               <span className="text-[11px] text-slate-600 font-bold">
                                 {v.validated_by === 'Self' ? 'Internal System' : v.validated_by}
                               </span>
