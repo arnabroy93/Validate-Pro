@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#042f2e" />
+      <stop offset="100%" stop-color="#115e59" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="100%" stop-color="#99f6e4" />
+    </linearGradient>
+    <filter id="neonBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="64" fill="url(#bgGrad)" />
+  
+  <!-- Outer futuristic tech circle segments -->
+  <path d="M128 48 A 80 80 0 0 1 208 128" fill="none" stroke="#0d9488" stroke-width="8" stroke-linecap="round" stroke-dasharray="4 12" />
+  <path d="M128 208 A 80 80 0 0 1 48 128" fill="none" stroke="#0d9488" stroke-width="8" stroke-linecap="round" stroke-dasharray="24 16" />
+  
+  <!-- Central V/Check -->
+  <path d="M72 128 L112 168 L192 80" fill="none" stroke="url(#glowGrad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonBlur)" />
+  
+  <!-- Bright center/accent -->
+  <circle cx="192" cy="80" r="14" fill="#ffffff" filter="url(#neonBlur)" />
+</svg>

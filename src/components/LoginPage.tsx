@@ -103,7 +103,7 @@ export function LoginPage() {
           
           <img 
             src="https://lh3.googleusercontent.com/d/1b3XcXXkSLbBzG94NHgFk1cp-nsQsdwTv" 
-            alt="ValidatePro Illustration" 
+            alt="Validate-Pro Illustration" 
             className="relative z-10 w-full h-full object-contain transition-all duration-500 hover:scale-[1.02] drop-shadow-xl"
             referrerPolicy="no-referrer"
           />
@@ -124,11 +124,9 @@ export function LoginPage() {
           
           <div className="glass-card p-10 mt-8 relative z-10">
             <div className="text-center mb-10">
-              <div className="w-16 h-16 bg-gradient-to-br from-brand-primary to-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_8px_16px_rgba(13,148,136,0.3)] border border-white/20">
-                <Lock className="text-white w-8 h-8" />
-              </div>
+              <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-16 h-16 mx-auto mb-6 rounded-2xl shadow-[0_8px_16px_rgba(13,148,136,0.3)]" />
               <h1 className="text-3xl font-black text-brand-text mb-2 tracking-tight">Welcome Back</h1>
-              <p className="text-brand-text/60 font-medium">Sign in to access ValidatePro Platform</p>
+              <p className="text-brand-text/60 font-medium">Sign in to access Validate-Pro Platform</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">

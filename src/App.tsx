@@ -26,10 +26,8 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
   return (
     <aside className="w-64 bg-white/40 backdrop-blur-xl border-r border-white/40 flex flex-col h-screen fixed left-0 top-0 z-10 shadow-[4px_0_24px_0_rgba(13,148,136,0.05)]">
       <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 bg-brand-primary rounded-lg flex items-center justify-center shadow-[0_4px_12px_rgba(13,148,136,0.4)]">
-          <div className="w-4 h-4 border-2 border-white rounded-sm mb-0.5"></div>
-        </div>
-        <span className="font-bold text-xl tracking-tight text-brand-text">ValidatePro</span>
+        <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-8 h-8 rounded-lg shadow-sm" />
+        <span className="font-bold text-xl tracking-tight text-brand-text">Validate-Pro</span>
       </div>
       
       <nav className="flex-1 px-4 space-y-1">

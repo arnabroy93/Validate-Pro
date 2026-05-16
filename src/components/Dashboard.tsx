@@ -830,7 +830,7 @@ export function Dashboard() {
               <FileSpreadsheet size={40} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-brand-text">Welcome to ValidatePro</h2>
+              <h2 className="text-xl font-bold text-brand-text">Welcome to Validate-Pro</h2>
               <p className="text-slate-500 max-w-xs mx-auto text-sm leading-relaxed">
                 {profile?.role === 'admin' 
                   ? "Select and upload an Excel data file to populate batch students." 
