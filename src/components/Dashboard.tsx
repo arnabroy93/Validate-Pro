@@ -445,24 +445,12 @@ export function Dashboard() {
       return;
     }
 
-    if (field === 'status' && value !== 'Pending' && value !== null) {
-      const recordingLink = (batchRecordingLink || '').trim();
-      if (!recordingLink) {
-        toast.error(`Recording link (G-Drive) is mandatory`);
+    if (field === 'status' && value === 'Rejected') {
+      const v = validations[studentCode] || {};
+      const remarks = (v.remarks || '').trim();
+      if (!remarks) {
+        toast.error(`Remarks are mandatory when status is Rejected. Please add a comment first.`);
         return;
-      }
-      if (!recordingLink.includes('drive.google.com')) {
-        toast.error(`Recording link must be a valid Google Drive link`);
-        return;
-      }
-
-      if (value === 'Rejected') {
-        const v = validations[studentCode] || {};
-        const remarks = (v.remarks || '').trim();
-        if (!remarks) {
-          toast.error(`Remarks are mandatory when status is Rejected. Please add a comment first.`);
-          return;
-        }
       }
     }
 
