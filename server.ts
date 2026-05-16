@@ -58,6 +58,7 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS batch_code TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validated_by TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS remarks TEXT;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS recording_link TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS dob TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS father_name TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS address TEXT;`;
@@ -694,6 +695,7 @@ ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS center_code TEXT
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS batch_code TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validated_by TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS remarks TEXT;
+ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS recording_link TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS dob TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS father_name TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS address TEXT;

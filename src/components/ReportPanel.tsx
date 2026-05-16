@@ -220,6 +220,7 @@ export function ReportPanel() {
       'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
       'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
       'Validation Status': v.status,
+      'Recording Link': v.recording_link || 'N.A.',
       'Remarks': v.remarks || 'N/A',
       'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
@@ -251,11 +252,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -657,6 +658,7 @@ export function ReportPanel() {
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Mic</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Camera</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Status</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Recording Link</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Remarks</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Aligned AE</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validated By</th>
@@ -717,6 +719,9 @@ export function ReportPanel() {
                             )}>
                               {v.status || 'Pending'}
                             </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <a href={v.recording_link && v.recording_link !== 'N.A.' && v.recording_link.startsWith('http') ? v.recording_link : undefined} target="_blank" rel="noopener noreferrer" className={cn("text-[11px] font-bold", v.recording_link && v.recording_link !== 'N.A.' ? "text-brand-primary underline" : "text-slate-700 pointer-events-none")}>{v.recording_link || 'N/A'}</a>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                              <p className="text-[11px] font-bold text-slate-700">{v.remarks || 'N/A'}</p>

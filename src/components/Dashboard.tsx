@@ -81,6 +81,7 @@ export function Dashboard() {
             id: record.id,
             status: record.status as any,
             remarks: record.remarks,
+            recording_link: record.recording_link || 'N.A.',
             mic_on: record.mic_on,
             video_on: record.video_on
           };
@@ -382,6 +383,7 @@ export function Dashboard() {
       aligned_ae: alignedAe || '',
       status: v.status || 'Pending',
       remarks: v.remarks || '',
+      recording_link: v.recording_link || '',
       mic_on: v.mic_on || false,
       video_on: v.video_on || false,
       user_id: user.id
@@ -463,7 +465,21 @@ export function Dashboard() {
       const v = validations[student.student_code] || {};
       const status = v.status || 'Pending';
       const remarks = (v.remarks || '').trim();
+      const recordingLink = (v.recording_link || '').trim();
       
+      if (status !== 'Pending') {
+        if (!recordingLink) {
+          toast.error(`Recording link is mandatory when status is changed from Pending (${student.student_code})`);
+          setLoading(false);
+          return;
+        }
+        if (recordingLink !== 'N.A.' && !recordingLink.includes('drive.google.com')) {
+          toast.error(`Recording link must be a valid Google Drive link (${student.student_code})`);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (status === 'Rejected' && !remarks) {
         toast.error(`Remarks are mandatory when status is Rejected`);
         setLoading(false);
@@ -486,6 +502,7 @@ export function Dashboard() {
         aligned_ae: alignedAe || '',
         status: v.status || 'Pending',
         remarks: v.remarks || '',
+        recording_link: v.recording_link || '',
         mic_on: v.mic_on || false,
         video_on: v.video_on || false,
         user_id: user.id
@@ -676,6 +693,7 @@ export function Dashboard() {
                         <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">
                           <Video className="w-3.5 h-3.5 mx-auto text-slate-500" />
                         </th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Recording Link</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Remarks</th>
                       </tr>
                     </thead>
@@ -730,6 +748,16 @@ export function Dashboard() {
                                 className="accent-indigo-500 w-4 h-4 cursor-pointer rounded"
                                 checked={v.video_on || false}
                                 onChange={(e) => handleCheckboxChange(student.student_code, 'video_on', e.target.checked)}
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={v.recording_link || ''}
+                                onChange={(e) => handleValidationChange(student.student_code, 'recording_link', e.target.value)}
+                                onBlur={() => handleRemarksBlur(student.student_code)}
+                                placeholder="G-Drive Link..."
+                                className="w-full bg-transparent border-b border-transparent focus:border-brand-primary focus:outline-none focus:ring-0 text-sm py-1 transition-all"
                               />
                             </td>
                             <td className="px-6 py-4">

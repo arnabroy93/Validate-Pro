@@ -56,6 +56,7 @@ export type StudentValidation = {
   aligned_ae?: string;
   status: 'Validated' | 'ReValidated' | 'Absent' | 'Rejected' | 'Pending';
   remarks: string;
+  recording_link?: string;
   mic_on?: boolean;
   video_on?: boolean;
   created_at?: string;
