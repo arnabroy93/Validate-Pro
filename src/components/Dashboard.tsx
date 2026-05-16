@@ -435,25 +435,6 @@ export function Dashboard() {
   };
 
   const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
-    if (!validatedBy) {
-      toast.error('User profile not fully loaded. Please reload.');
-      return;
-    }
-
-    if (!alignedAe) {
-      toast.error('Aligned AE is mandatory. Please select it from the dropdown first.');
-      return;
-    }
-
-    if (field === 'status' && value === 'Rejected') {
-      const v = validations[studentCode] || {};
-      const remarks = (v.remarks || '').trim();
-      if (!remarks) {
-        toast.error(`Remarks are mandatory when status is Rejected. Please add a comment first.`);
-        return;
-      }
-    }
-
     // 1. Optimistic update
     setValidations(prev => ({
       ...prev,

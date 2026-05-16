@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase';
-import { cn } from '../utils';
+import { cn, getAvatarUrl } from '../utils';
 import { toast } from 'react-hot-toast';
 import { Lock, User, Loader2, Image as ImageIcon } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, useAnimationControls } from 'motion/react';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -13,6 +13,18 @@ export function LoginPage() {
     backend: boolean; 
     config: { url: boolean; serviceKey: boolean; anonKey: boolean } 
   } | null>(null);
+
+  const controls = useAnimationControls();
+
+  useEffect(() => {
+    if (username) {
+      controls.start({
+        scale: [1, 1.05, 1],
+        rotate: [0, -3, 3, 0],
+        transition: { duration: 0.3 }
+      });
+    }
+  }, [username, controls]);
 
   const checkHealth = () => {
     setHealthStatus(null);
@@ -124,7 +136,18 @@ export function LoginPage() {
           
           <div className="glass-card p-10 mt-8 relative z-10">
             <div className="text-center mb-10">
-              <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-16 h-16 mx-auto mb-6 rounded-2xl shadow-[0_8px_16px_rgba(13,148,136,0.3)]" />
+              <div className="flex justify-center mb-6 h-24">
+                 <motion.div
+                   animate={controls}
+                   className="w-24 h-24 rounded-[2rem] overflow-hidden border-4 border-white shadow-[0_8px_16px_rgba(13,148,136,0.3)] bg-brand-light z-10 relative"
+                 >
+                   <img 
+                     src={getAvatarUrl(username || 'placeholder')} 
+                     alt="Avatar Preview" 
+                     className="w-full h-full object-cover bg-brand-light" 
+                   />
+                 </motion.div>
+              </div>
               <h1 className="text-3xl font-black text-brand-text mb-2 tracking-tight">Welcome Back</h1>
               <p className="text-brand-text/60 font-medium">Sign in to access Validate-Pro Platform</p>
             </div>
