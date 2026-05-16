@@ -396,7 +396,7 @@ export function Dashboard() {
       aligned_ae: alignedAe || '',
       status: v.status || 'Pending',
       remarks: v.remarks || '',
-      recording_link: batchRecordingLink || '',
+      recording_link: batchRecordingLink || 'N.A.',
       mic_on: v.mic_on || false,
       video_on: v.video_on || false,
       user_id: user.id
@@ -446,7 +446,7 @@ export function Dashboard() {
         toast.error(`Recording link (G-Drive) is mandatory`);
         return;
       }
-      if (recordingLink !== 'N.A.' && !recordingLink.includes('drive.google.com')) {
+      if (!recordingLink.includes('drive.google.com')) {
         toast.error(`Recording link must be a valid Google Drive link`);
         return;
       }
@@ -507,7 +507,7 @@ export function Dashboard() {
           setLoading(false);
           return;
         }
-        if (recordingLink !== 'N.A.' && !recordingLink.includes('drive.google.com')) {
+        if (!recordingLink.includes('drive.google.com')) {
           toast.error(`Recording link must be a valid Google Drive link (${student.student_code})`);
           setLoading(false);
           return;
@@ -536,7 +536,7 @@ export function Dashboard() {
         aligned_ae: alignedAe || '',
         status: v.status || 'Pending',
         remarks: v.remarks || '',
-        recording_link: batchRecordingLink || '',
+        recording_link: batchRecordingLink || 'N.A.',
         mic_on: v.mic_on || false,
         video_on: v.video_on || false,
         user_id: user.id
@@ -628,16 +628,18 @@ export function Dashboard() {
                 </select>
               </div>
 
-              <div className="space-y-2 md:col-span-2 lg:col-span-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recording Link (G-Drive)</label>
-                <input 
-                  type="text"
-                  value={batchRecordingLink}
-                  onChange={(e) => setBatchRecordingLink(e.target.value)}
-                  placeholder="https://drive.google.com/..."
-                  className="input-field"
-                />
-              </div>
+              {selectedBatch && (
+                <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recording Link (G-Drive)</label>
+                  <input 
+                    type="text"
+                    value={batchRecordingLink}
+                    onChange={(e) => setBatchRecordingLink(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    className="input-field"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Center Code</label>
