@@ -440,6 +440,11 @@ export function Dashboard() {
       return;
     }
 
+    if (!alignedAe) {
+      toast.error('Aligned AE is mandatory. Please select it from the dropdown first.');
+      return;
+    }
+
     if (field === 'status' && value !== 'Pending' && value !== null) {
       const recordingLink = (batchRecordingLink || '').trim();
       if (!recordingLink) {
@@ -487,6 +492,12 @@ export function Dashboard() {
     setLoading(true);
     if (!user) {
       toast.error('You must be logged in to submit validations');
+      setLoading(false);
+      return;
+    }
+
+    if (!alignedAe) {
+      toast.error('Aligned AE is mandatory. Please select it first.');
       setLoading(false);
       return;
     }

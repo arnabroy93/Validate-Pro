@@ -190,6 +190,7 @@ export function ReportPanel() {
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
             remarks: validationRow?.remarks || '',
+            recording_link: validationRow?.recording_link || '',
             mic_on: validationRow?.mic_on || false,
             video_on: validationRow?.video_on || false,
             created_at: validationRow?.created_at || null

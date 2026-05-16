@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.student_validations (
   validated_by TEXT,
   status TEXT DEFAULT 'Pending',
   remarks TEXT,
+  recording_link TEXT,
   mic_on BOOLEAN DEFAULT false,
   video_on BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
