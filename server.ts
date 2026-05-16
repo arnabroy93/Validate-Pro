@@ -683,7 +683,7 @@ export const app = express();
       const sqlToRun: string[] = [];
       const { error: valError } = await supabaseAdmin
         .from('student_validations')
-        .select('id, dob, address, father_name, status, mic_on, video_on, student_code, student_name, ae_name, center_code, batch_code, validated_by, remarks')
+        .select('id, dob, address, father_name, status, mic_on, video_on, student_code, student_name, ae_name, center_code, batch_code, validated_by, remarks, recording_link')
         .limit(1);
       
       if (valError && (valError.message.includes('column') || valError.message.includes('exist'))) {
