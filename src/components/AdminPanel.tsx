@@ -685,17 +685,30 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 </div>
                 
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {users.map(u => (
-                    <div key={u.id} className="p-5 bg-brand-input rounded-2xl border border-brand-border hover:border-brand-primary transition-all group space-y-4 relative">
+                  {users.map((u, idx) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.3) }}
+                      key={u.id} 
+                      className="p-5 bg-brand-input rounded-2xl border border-brand-border hover:border-brand-primary transition-all group space-y-4 relative"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 min-w-0">
                           <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shadow-sm shrink-0",
+                            "w-12 h-12 rounded-xl overflow-hidden shadow-sm shrink-0 border relative",
                             u.role === 'admin' 
-                              ? "bg-gradient-to-br from-brand-primary to-brand-hover text-white" 
-                              : "bg-white text-brand-hover border border-brand-border"
+                              ? "border-brand-primary bg-brand-light" 
+                              : "border-brand-border bg-slate-50"
                           )}>
-                            {u.username?.substring(0, 2).toUpperCase()}
+                            <img 
+                              src={`https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(u.username || 'user')}&backgroundColor=${u.role === 'admin' ? 'eef2ff,c0aede' : 'f1f5f9,e2e8f0'}`} 
+                              alt={u.username}
+                              className="w-full h-full object-cover relative z-10"
+                            />
+                            {u.role === 'admin' && (
+                              <div className="absolute inset-0 bg-brand-primary/10 z-20 mix-blend-overlay"></div>
+                            )}
                           </div>
                           <div className="truncate">
                             <p className="font-bold text-sm text-brand-text truncate leading-none mb-1">{u.username}</p>
@@ -742,7 +755,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
@@ -797,7 +810,13 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   <tbody className="divide-y divide-brand-divide">
                     {filteredValidations.length > 0 ? (
                       filteredValidations.map((v, idx) => (
-                        <tr key={v.id} className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}>
+                        <motion.tr 
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
+                          key={v.id} 
+                          className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}
+                        >
                           <td className="px-8 py-5 whitespace-nowrap">
                             <p className="font-bold text-sm text-brand-text mb-0.5">{v.student_name}</p>
                             <div className="flex items-center gap-2">
@@ -838,7 +857,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                              <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(v.created_at!)}</p>
                              <p className="text-[9px] text-slate-300 font-medium">Auto-recorded</p>
                           </td>
-                        </tr>
+                        </motion.tr>
                       ))
                     ) : (
                       <tr>
@@ -925,11 +944,17 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                         const d = new Date(v.created_at || new Date());
                         const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                         return (
-                        <tr key={`${v.id}-${idx}`} className={cn(
-                          idx % 2 === 0 ? "bg-white/20" : "bg-white/10", 
-                          "hover:bg-brand-light transition-colors group backdrop-blur-sm",
-                          selectedActivities.has(v.id!) ? 'bg-brand-muted/40' : ''
-                        )}>
+                        <motion.tr 
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
+                          key={`${v.id}-${idx}`} 
+                          className={cn(
+                            idx % 2 === 0 ? "bg-white/20" : "bg-white/10", 
+                            "hover:bg-brand-light transition-colors group backdrop-blur-sm",
+                            selectedActivities.has(v.id!) ? 'bg-brand-muted/40' : ''
+                          )}
+                        >
                           <td className="px-6 py-5 text-center cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleActivitySelection(v.id!); }}>
                             <input 
                               type="checkbox"
@@ -973,7 +998,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <td className="px-6 py-5 whitespace-nowrap text-right">
                              <p className="text-[11px] text-slate-500 font-mono font-bold">{dateOnly}</p>
                           </td>
-                        </tr>
+                        </motion.tr>
                       )})
                     ) : (
                       <tr>

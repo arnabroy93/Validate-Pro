@@ -120,8 +120,12 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 
       <div className="p-4 border-t border-brand-border/30">
         <div className="flex items-center gap-3 p-3 bg-white/40 rounded-2xl mb-4 border border-white/50 backdrop-blur-md shadow-sm">
-          <div className="w-10 h-10 bg-brand-primary/10 rounded-xl flex items-center justify-center font-black text-brand-primary shadow-inner shrink-0 text-sm">
-            {profile?.username?.substring(0, 2).toUpperCase()}
+          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-brand-primary/20 shadow-sm bg-brand-light">
+            <img 
+              src={`https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(profile?.username || 'user')}&backgroundColor=eef2ff,e0e7ff,c7d2fe`} 
+              alt={profile?.username || 'User Avatar'}
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-brand-text truncate leading-tight mb-0.5">{profile?.username}</p>

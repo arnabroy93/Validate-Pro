@@ -747,7 +747,13 @@ export function Dashboard() {
                         const studentKey = `${student.student_code || 'student'}-${idx}`;
                         const v = validations[student.student_code] || {};
                         return (
-                          <tr key={studentKey} className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors backdrop-blur-sm")}>
+                          <motion.tr 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
+                            key={studentKey} 
+                            className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors backdrop-blur-sm")}
+                          >
                             <td className="px-6 py-4 text-sm font-mono text-brand-primary font-semibold">{student.student_code}</td>
                             <td className="px-6 py-4">
                               <p className="text-sm font-semibold text-brand-text">{student.student_name}</p>
@@ -805,7 +811,7 @@ export function Dashboard() {
                                 className="w-full bg-transparent border-b border-transparent focus:border-brand-primary focus:outline-none focus:ring-0 text-sm py-1 transition-all"
                               />
                             </td>
-                          </tr>
+                          </motion.tr>
                         );
                       })}
                     </tbody>
@@ -825,10 +831,19 @@ export function Dashboard() {
         </AnimatePresence>
 
         {!data.length && !fetchingData && (
-          <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-6">
-            <div className="w-20 h-20 bg-brand-light rounded-3xl flex items-center justify-center text-brand-primary shadow-sm border border-brand-border">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="h-[60vh] flex flex-col items-center justify-center text-center space-y-6"
+          >
+            <motion.div 
+              initial={{ y: 0 }}
+              animate={{ y: [-5, 5, -5] }}
+              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+              className="w-20 h-20 bg-brand-light rounded-3xl flex items-center justify-center text-brand-primary shadow-sm border border-brand-border"
+            >
               <FileSpreadsheet size={40} />
-            </div>
+            </motion.div>
             <div>
               <h2 className="text-xl font-bold text-brand-text">Welcome to Validate-Pro</h2>
               <p className="text-slate-500 max-w-xs mx-auto text-sm leading-relaxed">
@@ -837,7 +852,7 @@ export function Dashboard() {
                   : "No batch records have been uploaded yet. Please contact your administrator."}
               </p>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {!data.length && fetchingData && (

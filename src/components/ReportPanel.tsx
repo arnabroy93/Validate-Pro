@@ -527,7 +527,13 @@ export function ReportPanel() {
               <tbody className="divide-y divide-brand-divide">
                 {filteredSummary.length > 0 ? (
                   filteredSummary.map((s, idx) => (
-                    <tr key={`${s.center_code}_${s.batch_code}`} className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}>
+                    <motion.tr 
+                      key={`${s.center_code}_${s.batch_code}`} 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
+                      className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}
+                    >
                       <td className="px-6 py-4 text-center">
                         <input 
                           type="checkbox" 
@@ -586,17 +592,20 @@ export function ReportPanel() {
                            <Eye size={14} /> View Details
                          </button>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))
                 ) : (
-                  <tr>
+                  <motion.tr
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
                     <td colSpan={13} className="px-8 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <Search size={48} className="text-slate-200" />
                         <p className="text-slate-400 font-bold">No reports matched your criteria.</p>
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 )}
               </tbody>
             </table>
@@ -668,7 +677,13 @@ export function ReportPanel() {
                       </thead>
                     <tbody className="divide-y divide-brand-divide">
                       {selectedBatchData.map((v, idx) => (
-                        <tr key={v.id} className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover:bg-brand-light transition-colors backdrop-blur-sm")}>
+                        <motion.tr 
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
+                          key={v.id} 
+                          className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover:bg-brand-light transition-colors backdrop-blur-sm")}
+                        >
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className="text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded font-mono font-bold border border-slate-200">{v.student_code}</span>
                           </td>
@@ -736,7 +751,7 @@ export function ReportPanel() {
                           <td className="px-6 py-3 whitespace-nowrap">
                             <p className="text-[11px] text-slate-500 font-mono font-bold">{v.created_at ? formatDate(v.created_at) : 'N/A'}</p>
                           </td>
-                        </tr>
+                        </motion.tr>
                       ))}
                     </tbody>
                   </table>
