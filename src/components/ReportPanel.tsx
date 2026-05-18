@@ -14,7 +14,7 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { cn, formatDate } from '../utils';
+import { cn, formatDate, formatTime } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface BatchSummary {
@@ -227,7 +227,8 @@ export function ReportPanel() {
       'Remarks': v.remarks || 'N/A',
       'Aligned AE': v.ae_name || 'N/A',
       'Validated By': v.validated_by || 'N/A',
-      'Latest Timestamp': v.created_at ? formatDate(v.created_at) : 'N/A'
+      'Date': v.created_at ? formatDate(v.created_at) : 'N/A',
+      'Time': v.created_at ? formatTime(v.created_at) : 'N/A'
     }));
   };
 
@@ -255,11 +256,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Date', 'Time']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -332,7 +333,8 @@ export function ReportPanel() {
         'Rejected': s.rejected,
         'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
-        'Latest Timestamp': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A'
+        'Date': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A',
+        'Time': s.latest_timestamp ? formatTime(s.latest_timestamp) : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -361,7 +363,8 @@ export function ReportPanel() {
         'Rejected': s.rejected,
         'Aligned AE': s.assigned_ae,
         'Validated By': s.validated_by,
-        'Latest Timestamp': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A'
+        'Date': s.latest_timestamp ? formatDate(s.latest_timestamp) : 'N/A',
+        'Time': s.latest_timestamp ? formatTime(s.latest_timestamp) : 'N/A'
       }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const csv = XLSX.utils.sheet_to_csv(ws);
@@ -384,11 +387,11 @@ export function ReportPanel() {
     const dataToExport = summaryData.filter(s => selectedBatchesForExport.has(s.batch_code));
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(s => [
-      s.center_code, s.batch_code, s.program_name || 'N/A', s.batch_start_date || 'N/A', calculateDaysSince(s.batch_start_date), s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), s.assigned_ae, s.validated_by, formatDate(s.latest_timestamp)
+      s.center_code, s.batch_code, s.program_name || 'N/A', s.batch_start_date || 'N/A', calculateDaysSince(s.batch_start_date), s.total_students.toString(), s.validated.toString(), s.revalidated.toString(), s.pending.toString(), s.absent.toString(), s.rejected.toString(), s.assigned_ae, s.validated_by, formatDate(s.latest_timestamp), formatTime(s.latest_timestamp)
     ]);
     
     (doc as any).autoTable({
-      head: [['Center Code', 'Batch Code', 'Program Name', 'Batch Start Date', 'Days Since Start', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Center Code', 'Batch Code', 'Program Name', 'Batch Start Date', 'Days Since Start', 'Total Students', 'Validated', 'Revalidated', 'Pending', 'Absent', 'Rejected', 'Aligned AE', 'Validated By', 'Date', 'Time']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -522,7 +525,7 @@ export function ReportPanel() {
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Rejected</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Aligned AE</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Validated By</th>
-                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Latest Timestamp</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Date & Time</th>
                   <th className="px-6 py-5 sticky right-0 top-0 bg-[#f8fafc] shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-30">Actions</th>
                 </tr>
               </thead>
@@ -585,6 +588,7 @@ export function ReportPanel() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                          <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(s.latest_timestamp)}</p>
+                         <p className="text-[10px] text-slate-400 font-mono">{formatTime(s.latest_timestamp)}</p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap sticky right-0 bg-white shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
                          <button 
@@ -675,7 +679,7 @@ export function ReportPanel() {
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Remarks</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Aligned AE</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validated By</th>
-                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Latest Timestamp</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Date & Time</th>
                         </tr>
                       </thead>
                     <tbody className="divide-y divide-brand-divide">
@@ -763,6 +767,7 @@ export function ReportPanel() {
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <p className="text-[11px] text-slate-500 font-mono font-bold">{v.created_at ? formatDate(v.created_at) : 'N/A'}</p>
+                            {v.created_at && <p className="text-[10px] text-slate-400 font-mono">{formatTime(v.created_at)}</p>}
                           </td>
                         </motion.tr>
                       ))}

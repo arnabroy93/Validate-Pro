@@ -13,6 +13,14 @@ export function formatDate(date: string | number | Date) {
   }).format(new Date(date));
 }
 
+export function formatTime(date: string | number | Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }).format(new Date(date));
+}
+
 const femaleUsernames = [
   'karishma.tiwari',
   'madhu.soni',

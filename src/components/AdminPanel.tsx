@@ -21,7 +21,7 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { cn, formatDate, getAvatarUrl } from '../utils';
+import { cn, formatDate, formatTime, getAvatarUrl } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' }) {
@@ -207,7 +207,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const getMappedDataForExport = (data: any[], prefix: string) => {
     return data.map(v => {
       const d = new Date(v.created_at || new Date());
-      const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateOnly = formatDate(d);
+      const timeOnly = formatTime(d);
       
       if (prefix === 'User_Activity') {
         return {
@@ -217,7 +218,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           'No. of Validation': v.validated,
           'No. of Pending': v.pending,
           'Validated By': v.validated_by,
-          'Latest Timestamp': dateOnly
+          'Date': dateOnly,
+          'Time': timeOnly
         };
       }
       
@@ -230,7 +232,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         'Recording Link': v.recording_link || 'N/A',
         'Aligned AE': v.aligned_ae || v.ae_name || 'N/A',
         'Validated By': v.validated_by,
-        'Latest Timestamp': dateOnly,
+        'Date': dateOnly,
+        'Time': timeOnly
       };
     });
   };
@@ -267,21 +270,22 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     const exportPrefix = typeof prefix === 'string' ? prefix : 'Validations';
     const doc = new jsPDF('l', 'pt');
     
-    let head = [['Code', 'Name', 'Batch', 'Status', 'Validation Type', 'Recording Link', 'Aligned AE', 'Validated By', 'Latest Timestamp']];
+    let head = [['Code', 'Name', 'Batch', 'Status', 'Validation Type', 'Recording Link', 'Aligned AE', 'Validated By', 'Date', 'Time']];
     let bodyData: any[] = [];
     
     if (exportPrefix === 'User_Activity') {
-      head = [['Batch Code', 'Validation Status', 'Total no. of Student', 'No. of Validation', 'No. of Pending', 'Validated By', 'Latest Timestamp']];
+      head = [['Batch Code', 'Validation Status', 'Total no. of Student', 'No. of Validation', 'No. of Pending', 'Validated By', 'Date', 'Time']];
       bodyData = exportData.map(v => {
         const d = new Date(v.created_at || new Date());
-        const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const dateOnly = formatDate(d);
+        const timeOnly = formatTime(d);
         return [
-          v.batch_code, v.status, v.total, v.validated, v.pending, v.validated_by, dateOnly
+          v.batch_code, v.status, v.total, v.validated, v.pending, v.validated_by, dateOnly, timeOnly
         ];
       });
     } else {
       bodyData = exportData.map(v => [
-        v.student_code, v.student_name, v.batch_code, v.status, v.validation_type || 'N/A', v.recording_link || 'N/A', v.aligned_ae || v.ae_name || 'N/A', v.validated_by, v.created_at ? formatDate(v.created_at) : 'N/A'
+        v.student_code, v.student_name, v.batch_code, v.status, v.validation_type || 'N/A', v.recording_link || 'N/A', v.aligned_ae || v.ae_name || 'N/A', v.validated_by, v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
       ]);
     }
     
@@ -807,7 +811,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <th className="px-8 py-5">Validation Status</th>
                       <th className="px-8 py-5">Validation Details</th>
                       <th className="px-8 py-5">Validated By</th>
-                      <th className="px-8 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
+                      <th className="px-8 py-5 text-right whitespace-nowrap">Date & Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-divide">
@@ -876,7 +880,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </td>
                           <td className="px-8 py-5 whitespace-nowrap text-right">
                              <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(v.created_at!)}</p>
-                             <p className="text-[9px] text-slate-300 font-medium">Auto-recorded</p>
+                             <p className="text-[10px] text-slate-400 font-mono">{formatTime(v.created_at!)}</p>
                           </td>
                         </motion.tr>
                       ))
@@ -956,14 +960,14 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <th className="px-6 py-5 text-center">Validated</th>
                       <th className="px-6 py-5 text-center">Pending</th>
                       <th className="px-6 py-5">Validated By</th>
-                      <th className="px-6 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
+                      <th className="px-6 py-5 text-right whitespace-nowrap">Date & Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-divide">
                     {filteredBatchActivities.length > 0 ? (
                       filteredBatchActivities.map((v, idx) => {
                         const d = new Date(v.created_at || new Date());
-                        const dateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        const dateOnly = formatDate(d);
                         return (
                         <motion.tr 
                           initial={{ opacity: 0, x: -10 }}
@@ -1015,7 +1019,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             </div>
                           </td>
                           <td className="px-6 py-5 whitespace-nowrap text-right">
-                             <p className="text-[11px] text-slate-500 font-mono font-bold">{dateOnly}</p>
+                             <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(d)}</p>
+                             <p className="text-[10px] text-slate-400 font-mono">{formatTime(d)}</p>
                           </td>
                         </motion.tr>
                       )})
