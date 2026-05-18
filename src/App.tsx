@@ -18,8 +18,10 @@ import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw } from 'lucide-react';
 import { cn, getAvatarUrl } from './utils';
+import { Background } from './components/Background';
 
 function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
+
   const { profile, signOut } = useAuth();
   const isAdmin = profile?.role === 'admin';
 
@@ -221,6 +223,7 @@ function MainContent() {
 export default function App() {
   return (
     <AuthProvider>
+      <Background />
       <MainContent />
       <Toaster position="top-right" />
     </AuthProvider>
