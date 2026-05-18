@@ -190,6 +190,7 @@ export function ReportPanel() {
             validated_by: validationRow?.validated_by || 'N/A',
             status: currentStatus,
             remarks: validationRow?.remarks || '',
+            validation_type: validationRow?.validation_type || '',
             recording_link: validationRow?.recording_link || '',
             mic_on: validationRow?.mic_on || false,
             video_on: validationRow?.video_on || false,
@@ -221,6 +222,7 @@ export function ReportPanel() {
       'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
       'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
       'Validation Status': v.status,
+      'Validation Type': v.validation_type || 'N/A',
       'Recording Link': v.recording_link || 'N.A.',
       'Remarks': v.remarks || 'N/A',
       'Aligned AE': v.ae_name || 'N/A',
@@ -253,11 +255,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Latest Timestamp']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -668,6 +670,7 @@ export function ReportPanel() {
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Mic</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Camera</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Status</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Type</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Recording Link</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Remarks</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Aligned AE</th>
@@ -734,6 +737,16 @@ export function ReportPanel() {
                               "bg-amber-50 text-amber-700 border-amber-200" // Pending
                             )}>
                               {v.status || 'Pending'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
+                              v.validation_type === 'Online' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                              v.validation_type === 'Offline' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                              "bg-slate-50 text-slate-700 border-slate-300" 
+                            )}>
+                              {v.validation_type || 'N.A.'}
                             </span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">

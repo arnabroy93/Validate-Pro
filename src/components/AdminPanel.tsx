@@ -226,6 +226,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
         'Student Name': v.student_name,
         'Batch Code': v.batch_code,
         'Validation Status': v.status,
+        'Validation Type': v.validation_type || 'N/A',
+        'Recording Link': v.recording_link || 'N/A',
         'Aligned AE': v.aligned_ae || v.ae_name || 'N/A',
         'Validated By': v.validated_by,
         'Latest Timestamp': dateOnly,
@@ -265,7 +267,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     const exportPrefix = typeof prefix === 'string' ? prefix : 'Validations';
     const doc = new jsPDF('l', 'pt');
     
-    let head = [['Code', 'Name', 'Batch', 'Status', 'Aligned AE', 'Validated By', 'Latest Timestamp']];
+    let head = [['Code', 'Name', 'Batch', 'Status', 'Validation Type', 'Recording Link', 'Aligned AE', 'Validated By', 'Latest Timestamp']];
     let bodyData: any[] = [];
     
     if (exportPrefix === 'User_Activity') {
@@ -279,7 +281,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
       });
     } else {
       bodyData = exportData.map(v => [
-        v.student_code, v.student_name, v.batch_code, v.status, v.aligned_ae || v.ae_name || 'N/A', v.validated_by, v.created_at ? formatDate(v.created_at) : 'N/A'
+        v.student_code, v.student_name, v.batch_code, v.status, v.validation_type || 'N/A', v.recording_link || 'N/A', v.aligned_ae || v.ae_name || 'N/A', v.validated_by, v.created_at ? formatDate(v.created_at) : 'N/A'
       ]);
     }
     
@@ -803,6 +805,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <th className="px-8 py-5">Student Identity</th>
                       <th className="px-8 py-5">Batch & Center Code</th>
                       <th className="px-8 py-5">Validation Status</th>
+                      <th className="px-8 py-5">Validation Details</th>
                       <th className="px-8 py-5">Validated By</th>
                       <th className="px-8 py-5 text-right whitespace-nowrap">Latest Timestamp</th>
                     </tr>
@@ -842,6 +845,26 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             )}>
                               {v.status}
                             </span>
+                          </td>
+                          <td className="px-8 py-5 whitespace-nowrap">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                                  v.validation_type === 'Online' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  v.validation_type === 'Offline' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  "bg-slate-50 text-slate-700 border-slate-300" 
+                                )}>
+                                  {v.validation_type || 'N/A'}
+                                </span>
+                              </div>
+                              <a href={v.recording_link && v.recording_link !== 'N.A.' && v.recording_link.startsWith('http') ? v.recording_link : undefined} 
+                                 target="_blank" 
+                                 rel="noopener noreferrer" 
+                                 className={cn("text-[10px] truncate max-w-[120px] font-bold block", v.recording_link && v.recording_link !== 'N.A.' ? "text-brand-primary underline" : "text-slate-400 pointer-events-none")}>
+                                {v.recording_link || 'N/A'}
+                              </a>
+                            </div>
                           </td>
                           <td className="px-8 py-5 whitespace-nowrap">
                             <div className="flex items-center gap-2">

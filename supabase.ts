@@ -57,6 +57,7 @@ export type StudentValidation = {
   status: 'Validated' | 'ReValidated' | 'Absent' | 'Rejected' | 'Pending';
   remarks: string;
   recording_link?: string;
+  validation_type?: string;
   mic_on?: boolean;
   video_on?: boolean;
   created_at?: string;

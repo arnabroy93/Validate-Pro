@@ -32,6 +32,7 @@ export function Dashboard() {
   const [batchRecordingLink, setBatchRecordingLink] = useState('');
   const [selectedCenter, setSelectedCenter] = useState('');
   const [selectedBatch, setSelectedBatch] = useState('');
+  const [validationType, setValidationType] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
 
   const validatedBy = profile?.username || '';
@@ -39,6 +40,7 @@ export function Dashboard() {
   // Local validation state
   // Key: student_code, Value: validation details
   const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>({});
+  const [dirtyStudents, setDirtyStudents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchBatchStudents();
@@ -80,9 +82,13 @@ export function Dashboard() {
         const existingRecords = await res.json();
         const loadedValidations: Record<string, Partial<StudentValidation>> = {};
         let existingLink = '';
+        let existingValType = '';
         existingRecords.forEach((record: any) => {
           if (!existingLink && record.recording_link && record.recording_link !== 'N.A.') {
             existingLink = record.recording_link;
+          }
+          if (!existingValType && record.validation_type && record.validation_type !== 'N.A.') {
+            existingValType = record.validation_type;
           }
           loadedValidations[record.student_code] = {
             id: record.id,
@@ -90,6 +96,7 @@ export function Dashboard() {
             remarks: record.remarks,
             // Only strictly populate the existing state so we don't accidentally lose it if it was entered
             recording_link: record.recording_link || 'N.A.',
+            validation_type: record.validation_type || 'N.A.',
             mic_on: record.mic_on,
             video_on: record.video_on
           };
@@ -99,6 +106,11 @@ export function Dashboard() {
           setBatchRecordingLink(existingLink);
         } else {
           setBatchRecordingLink('');
+        }
+        if (existingValType) {
+          setValidationType(existingValType);
+        } else {
+          setValidationType('');
         }
       }
     };
@@ -364,6 +376,7 @@ export function Dashboard() {
   }, [filteredStudents, studentSearch]);
 
   const handleValidationChange = (studentCode: string, field: keyof StudentValidation, value: any) => {
+    setDirtyStudents(prev => new Set(prev).add(studentCode));
     setValidations(prev => ({
       ...prev,
       [studentCode]: {
@@ -396,10 +409,12 @@ export function Dashboard() {
       aligned_ae: alignedAe || '',
       status: v.status || 'Pending',
       remarks: v.remarks || '',
-      recording_link: batchRecordingLink || 'N.A.',
+      recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
+      validation_type: validationType || 'N.A.',
       mic_on: v.mic_on || false,
       video_on: v.video_on || false,
-      user_id: user.id
+      user_id: user.id,
+      created_at: new Date().toISOString()
     };
     
     if (v.id) {
@@ -435,6 +450,7 @@ export function Dashboard() {
   };
 
   const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
+    setDirtyStudents(prev => new Set(prev).add(studentCode));
     // 1. Optimistic update
     setValidations(prev => ({
       ...prev,
@@ -448,6 +464,7 @@ export function Dashboard() {
   };
 
   const handleRemarksBlur = (studentCode: string) => {
+    setDirtyStudents(prev => new Set(prev).add(studentCode));
     autosaveValidation(studentCode);
   };
 
@@ -476,14 +493,16 @@ export function Dashboard() {
     
     // Validate remarks
     for (const student of filteredStudents) {
+      if (!dirtyStudents.has(student.student_code)) continue;
+
       const v = validations[student.student_code] || {};
       const status = v.status || 'Pending';
       const remarks = (v.remarks || '').trim();
       const recordingLink = (batchRecordingLink || '').trim();
       
-      if (status !== 'Pending') {
+      if (validationType === 'Online' && status !== 'Pending') {
         if (!recordingLink) {
-          toast.error(`Recording link (G-Drive) is mandatory`);
+          toast.error(`Recording link (G-Drive) is mandatory for Online Validation`);
           setLoading(false);
           return;
         }
@@ -502,6 +521,8 @@ export function Dashboard() {
     }
 
     filteredStudents.forEach(student => {
+      if (!dirtyStudents.has(student.student_code)) return;
+
       const v = validations[student.student_code] || {};
       const record: any = {
         student_code: student.student_code,
@@ -516,10 +537,12 @@ export function Dashboard() {
         aligned_ae: alignedAe || '',
         status: v.status || 'Pending',
         remarks: v.remarks || '',
-        recording_link: batchRecordingLink || 'N.A.',
+        recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
+        validation_type: validationType || 'N.A.',
         mic_on: v.mic_on || false,
         video_on: v.video_on || false,
-        user_id: user.id
+        user_id: user.id,
+        created_at: new Date().toISOString()
       };
       
       if (v.id) {
@@ -542,6 +565,7 @@ export function Dashboard() {
         throw new Error(err.error || 'Failed to submit validations');
       }
       toast.success('Batch validations submitted successfully!');
+      setDirtyStudents(new Set()); // Reset dirty state
     } catch (error: any) {
       let errMsg = error.message || 'Error submitting data';
       if (errMsg.includes('aligned_ae') || errMsg.includes('schema cache')) {
@@ -566,7 +590,7 @@ export function Dashboard() {
             </label>
           )}
           <button
-            disabled={loading || !selectedBatch}
+            disabled={loading || !selectedBatch || !validationType}
             onClick={handleSubmit}
             className="btn-primary flex items-center gap-2 disabled:opacity-50"
           >
@@ -583,7 +607,7 @@ export function Dashboard() {
               key="filters-config"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 glass-card p-6"
+              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 glass-card p-6"
             >
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Validated By</label>
@@ -607,19 +631,6 @@ export function Dashboard() {
                   {VALIDATED_BY_OPTIONS.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
-
-              {selectedBatch && (
-                <div className="space-y-2 md:col-span-2 lg:col-span-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recording Link (G-Drive)</label>
-                  <input 
-                    type="text"
-                    value={batchRecordingLink}
-                    onChange={(e) => setBatchRecordingLink(e.target.value)}
-                    placeholder="https://drive.google.com/..."
-                    className="input-field"
-                  />
-                </div>
-              )}
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Center Code</label>
@@ -648,12 +659,39 @@ export function Dashboard() {
                   {batchCodes.map(code => <option key={code} value={code}>{code}</option>)}
                 </select>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Validation Type</label>
+                <select 
+                  disabled={!selectedBatch}
+                  value={validationType}
+                  onChange={(e) => setValidationType(e.target.value)}
+                  className="input-field disabled:opacity-50"
+                >
+                  <option value="">Select Type...</option>
+                  <option value="Offline">Offline</option>
+                  <option value="Online">Online</option>
+                </select>
+              </div>
+
+              {selectedBatch && validationType === 'Online' && (
+                <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recording Link (G-Drive)</label>
+                  <input 
+                    type="text"
+                    value={batchRecordingLink}
+                    onChange={(e) => setBatchRecordingLink(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    className="input-field"
+                  />
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
 
         <AnimatePresence>
-          {selectedBatch && filteredStudents.length > 0 && (
+          {selectedBatch && validationType && filteredStudents.length > 0 && (
             <motion.div
               key={`batch-data-${selectedBatch}`}
               initial={{ opacity: 0, scale: 0.99 }}

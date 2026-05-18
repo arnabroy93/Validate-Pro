@@ -64,6 +64,8 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS address TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS mic_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS video_on BOOLEAN DEFAULT false;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validation_type TEXT;`;
+    await sql`UPDATE public.student_validations SET validation_type = 'N.A.' WHERE validation_type IS NULL;`;
 
     // Ensure batch_students has batch_start_date, program_name, education_qualification
     try {
@@ -683,7 +685,7 @@ export const app = express();
       const sqlToRun: string[] = [];
       const { error: valError } = await supabaseAdmin
         .from('student_validations')
-        .select('id, dob, address, father_name, status, mic_on, video_on, student_code, student_name, ae_name, center_code, batch_code, validated_by, remarks, recording_link')
+        .select('id, dob, address, father_name, status, mic_on, video_on, student_code, student_name, ae_name, center_code, batch_code, validated_by, remarks, recording_link, validation_type')
         .limit(1);
       
       if (valError && (valError.message.includes('column') || valError.message.includes('exist'))) {
@@ -696,6 +698,8 @@ ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS batch_code TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validated_by TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS remarks TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS recording_link TEXT;
+ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validation_type TEXT;
+UPDATE public.student_validations SET validation_type = 'N.A.' WHERE validation_type IS NULL;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS dob TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS father_name TEXT;
 ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS address TEXT;
