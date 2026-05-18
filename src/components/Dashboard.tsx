@@ -28,29 +28,73 @@ export function Dashboard() {
   const [fetchingData, setFetchingData] = useState(false);
 
   // Filters state
-  const [alignedAe, setAlignedAe] = useState('');
-  const [batchRecordingLink, setBatchRecordingLink] = useState('');
-  const [selectedCenter, setSelectedCenter] = useState('');
-  const [selectedBatch, setSelectedBatch] = useState('');
-  const [validationType, setValidationType] = useState('');
+  const [alignedAe, setAlignedAe] = useState(() => sessionStorage.getItem('val_alignedAe') || '');
+  const [batchRecordingLink, setBatchRecordingLink] = useState(() => sessionStorage.getItem('val_batchRecordingLink') || '');
+  const [selectedCenter, setSelectedCenter] = useState(() => sessionStorage.getItem('val_selectedCenter') || '');
+  const [selectedBatch, setSelectedBatch] = useState(() => sessionStorage.getItem('val_selectedBatch') || '');
+  const [validationType, setValidationType] = useState(() => sessionStorage.getItem('val_validationType') || '');
   const [studentSearch, setStudentSearch] = useState('');
 
   const validatedBy = profile?.username || '';
 
   // Local validation state
   // Key: student_code, Value: validation details
-  const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>({});
-  const [dirtyStudents, setDirtyStudents] = useState<Set<string>>(new Set());
+  const [validations, setValidations] = useState<Record<string, Partial<StudentValidation>>>(() => {
+    try {
+      const saved = sessionStorage.getItem('val_validations');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [dirtyStudents, setDirtyStudents] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('val_dirtyStudents');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const lastFetchedBatch = React.useRef(sessionStorage.getItem('val_lastFetchedBatch') || '');
+
+  // Effects to persist state
+  useEffect(() => {
+    sessionStorage.setItem('val_alignedAe', alignedAe);
+    sessionStorage.setItem('val_batchRecordingLink', batchRecordingLink);
+    sessionStorage.setItem('val_selectedCenter', selectedCenter);
+    sessionStorage.setItem('val_selectedBatch', selectedBatch);
+    sessionStorage.setItem('val_validationType', validationType);
+  }, [alignedAe, batchRecordingLink, selectedCenter, selectedBatch, validationType]);
+
+  useEffect(() => {
+    sessionStorage.setItem('val_validations', JSON.stringify(validations));
+  }, [validations]);
+
+  useEffect(() => {
+    sessionStorage.setItem('val_dirtyStudents', JSON.stringify(Array.from(dirtyStudents)));
+  }, [dirtyStudents]);
+
+  useEffect(() => {
+    sessionStorage.setItem('val_lastFetchedBatch', lastFetchedBatch.current);
+  }, [lastFetchedBatch.current]);
 
   useEffect(() => {
     fetchBatchStudents();
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     const fetchExistingValidations = async () => {
+      const currentBatchKey = `${selectedCenter}_${selectedBatch}`;
+      
       if (!selectedBatch || !selectedCenter) {
-        setValidations({});
-        setBatchRecordingLink('');
+        if (lastFetchedBatch.current !== '') {
+          setValidations({});
+          setBatchRecordingLink('');
+          setValidationType('');
+          setDirtyStudents(new Set());
+          lastFetchedBatch.current = '';
+        }
         return;
       }
       
@@ -61,10 +105,12 @@ export function Dashboard() {
       );
       
       if (studentsInBatch.length === 0) {
-        setValidations({});
-        setBatchRecordingLink('');
+        // Data might not be loaded yet, wait for data
         return;
       }
+
+      // If we already fetched for this batch key today, skip it so users don't lose edits to `data` refresh
+      if (lastFetchedBatch.current === currentBatchKey) return;
 
       const studentCodes = studentsInBatch.map(s => s.student_code);
 
@@ -94,13 +140,14 @@ export function Dashboard() {
             id: record.id,
             status: record.status as any,
             remarks: record.remarks,
-            // Only strictly populate the existing state so we don't accidentally lose it if it was entered
             recording_link: record.recording_link || 'N.A.',
             validation_type: record.validation_type || 'N.A.',
             mic_on: record.mic_on,
             video_on: record.video_on
           };
         });
+        
+        // Only safely update everything since this is our first time loading this batch
         setValidations(loadedValidations);
         if (existingLink) {
           setBatchRecordingLink(existingLink);
@@ -112,6 +159,9 @@ export function Dashboard() {
         } else {
           setValidationType('');
         }
+        setDirtyStudents(new Set());
+        
+        lastFetchedBatch.current = currentBatchKey;
       }
     };
     
