@@ -34,7 +34,13 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
       
       <nav className="flex-1 px-4 space-y-1">
         <button
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => {
+            if (activeTab === 'dashboard') {
+              window.dispatchEvent(new CustomEvent('reset_validation'));
+            } else {
+              setActiveTab('dashboard');
+            }
+          }}
           className={cn(
             "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
             activeTab === 'dashboard' 

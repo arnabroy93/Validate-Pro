@@ -15,7 +15,8 @@ import {
   User,
   Loader2,
   Mic,
-  Video
+  Video,
+  RefreshCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
@@ -78,6 +79,32 @@ export function Dashboard() {
   useEffect(() => {
     sessionStorage.setItem('val_lastFetchedBatch', lastFetchedBatch.current);
   }, [lastFetchedBatch.current]);
+
+  useEffect(() => {
+    const handleReset = () => {
+      setAlignedAe('');
+      setBatchRecordingLink('');
+      setSelectedCenter('');
+      setSelectedBatch('');
+      setValidationType('');
+      setStudentSearch('');
+      setValidations({});
+      setDirtyStudents(new Set());
+      lastFetchedBatch.current = '';
+      
+      sessionStorage.removeItem('val_alignedAe');
+      sessionStorage.removeItem('val_batchRecordingLink');
+      sessionStorage.removeItem('val_selectedCenter');
+      sessionStorage.removeItem('val_selectedBatch');
+      sessionStorage.removeItem('val_validationType');
+      sessionStorage.removeItem('val_validations');
+      sessionStorage.removeItem('val_dirtyStudents');
+      sessionStorage.removeItem('val_lastFetchedBatch');
+    };
+    
+    window.addEventListener('reset_validation', handleReset);
+    return () => window.removeEventListener('reset_validation', handleReset);
+  }, []);
 
   useEffect(() => {
     fetchBatchStudents();
@@ -639,6 +666,14 @@ export function Dashboard() {
               <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
             </label>
           )}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('reset_validation'))}
+            className="btn-secondary flex items-center gap-2 bg-white text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5"
+            title="Start New Validation / Clear Form"
+          >
+            <RefreshCcw size={16} />
+            <span className="hidden sm:inline">Start New</span>
+          </button>
           <button
             disabled={loading || !selectedBatch || !validationType}
             onClick={handleSubmit}
