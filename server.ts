@@ -944,6 +944,148 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
   });
 
+  // Power BI Integration APIs
+  const authenticatePowerBI = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const customToken = process.env.POWERBI_TOKEN || 'VP-PBI-Sec-9988-ABC';
+    const authHeader = req.headers.authorization;
+    let token = req.query.token;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    if (!token || token !== customToken) {
+      return res.status(401).json({ 
+        error: 'Unauthorized: Invalid or missing Power BI integration token.',
+        instructions: 'Please provide either an "Authorization: Bearer <token>" header or "?token=<token>" query parameter.'
+      });
+    }
+    next();
+  };
+
+  app.get('/api/powerbi/students', authenticatePowerBI, async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      
+      const limit = 1000;
+      let allStudents: any[] = [];
+      let from = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabaseAdmin
+          .from('batch_students')
+          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+          .order('created_at', { ascending: false })
+          .range(from, from + limit - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allStudents = [...allStudents, ...data];
+          from += limit;
+          if (data.length < limit) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
+      res.json(allStudents);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/powerbi/validations', authenticatePowerBI, async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      
+      const limit = 1000;
+      let allValidations: any[] = [];
+      let from = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabaseAdmin
+          .from('student_validations')
+          .select('id, user_id, student_code, student_name, dob, father_name, address, ae_name, aligned_ae, center_code, batch_code, validated_by, status, remarks, recording_link, mic_on, video_on, validation_type, created_at, updated_at')
+          .order('created_at', { ascending: false })
+          .range(from, from + limit - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allValidations = [...allValidations, ...data];
+          from += limit;
+          if (data.length < limit) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
+      res.json(allValidations);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/powerbi/summary', authenticatePowerBI, async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      
+      // Let's get both students and validations to build a smart denormalized dashboard view!
+      // This is the absolute ultimate data table for Power BI! It maps student -> validation.
+      const { data: students, error: sErr } = await supabaseAdmin.from('batch_students').select('*');
+      if (sErr) throw sErr;
+      
+      const { data: validations, error: vErr } = await supabaseAdmin.from('student_validations').select('*');
+      if (vErr) throw vErr;
+
+      // Group validations by batch_code & student_code
+      const valMap = new Map();
+      validations?.forEach(v => {
+        const key = `${v.batch_code}_${v.student_code}`;
+        valMap.set(key, v);
+      });
+
+      const denormalized = students?.map(std => {
+        const valKey = `${std.batch_code}_${std.student_code}`;
+        const val = valMap.get(valKey);
+
+        return {
+          student_id: std.id,
+          student_code: std.student_code,
+          student_name: std.student_name,
+          mobile_no: std.mobile_no,
+          dob: std.dob,
+          father_name: std.father_name,
+          address: std.address,
+          program_name: std.program_name,
+          education_qualification: std.education_qualification,
+          batch_code: std.batch_code,
+          center_code: std.center_code,
+          ae_name: std.ae_name,
+          batch_start_date: std.batch_start_date,
+          batch_status: std.batch_status,
+          student_created_at: std.created_at,
+          
+          // Validation fields (if done)
+          is_validated: !!val,
+          validation_id: val ? val.id : null,
+          validation_status: val ? val.status : 'pending',
+          validation_remarks: val ? val.remarks : null,
+          validated_by: val ? val.validated_by : null,
+          recording_link: val ? val.recording_link : null,
+          mic_on: val ? val.mic_on : false,
+          video_on: val ? val.video_on : false,
+          validation_type: val ? val.validation_type : null,
+          validated_at: val ? val.created_at : null,
+          validated_updated_at: val ? val.updated_at : null
+        };
+      }) || [];
+
+      res.json(denormalized);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware for development or fallback static serving
 async function setupServer() {
   if (process.env.NODE_ENV !== 'production') {

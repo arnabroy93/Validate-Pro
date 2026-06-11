@@ -16,7 +16,16 @@ import {
   Cloud,
   Database,
   Server,
-  HardDrive
+  HardDrive,
+  BarChart3,
+  Copy,
+  Check,
+  ExternalLink,
+  HelpCircle,
+  Key,
+  Lock,
+  Terminal,
+  Info
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -24,7 +33,7 @@ import autoTable from 'jspdf-autotable';
 import { cn, formatDate, formatTime, getAvatarUrl } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' }) {
+export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' | 'powerbi' }) {
   const { profile } = useAuth();
   const [validations, setValidations] = useState<StudentValidation[]>([]);
   const [allValidations, setAllValidations] = useState<StudentValidation[]>([]);
@@ -47,7 +56,16 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const [lastBackup, setLastBackup] = useState<any>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity'>('records');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity' | 'powerbi'>('records');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState<boolean>(false);
+
+  const handleCopy = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldId);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Update internal tab when prop changes
   useEffect(() => {
@@ -451,15 +469,18 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           {activeSubTab === 'users' && <UserPlus className="text-brand-primary" size={28} />}
           {activeSubTab === 'health' && <RefreshCcw className="text-brand-primary" size={28} />}
           {activeSubTab === 'user_activity' && <FileText className="text-brand-primary" size={28} />}
+          {activeSubTab === 'powerbi' && <BarChart3 className="text-brand-primary" size={28} />}
           {activeSubTab === 'records' ? 'Validation Intelligence' : 
            activeSubTab === 'users' ? 'Account Control' : 
-           activeSubTab === 'user_activity' ? 'User Activity Log' : 'System Integrity'}
+           activeSubTab === 'user_activity' ? 'User Activity Log' : 
+           activeSubTab === 'powerbi' ? 'Power BI Integration' : 'System Integrity'}
         </h1>
         <p className="text-slate-500 text-sm mt-1 font-medium italic opacity-70">
           {activeSubTab === 'records' && "Real-time auditing and verification history."}
           {activeSubTab === 'users' && "Manage system access and specialized auditor roles."}
           {activeSubTab === 'user_activity' && "Track every single action and validation performed by users."}
           {activeSubTab === 'health' && "Deep-level diagnostics of infrastructure and database sync state."}
+          {activeSubTab === 'powerbi' && "Expose and connect live auditing metrics to power-up Microsoft Power BI reports."}
         </p>
       </div>
 
@@ -1038,6 +1059,325 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 </table>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {activeSubTab === 'powerbi' && (
+          <motion.div
+            key="powerbi"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {/* Banner overview */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200/50 p-6 rounded-2xl flex flex-col md:flex-row shadow-sm justify-between gap-6">
+              <div className="space-y-2 flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                    <BarChart3 size={20} />
+                  </div>
+                  <h3 className="font-bold text-orange-950 text-base">Direct Microsoft Power BI Integration</h3>
+                </div>
+                <p className="text-sm text-orange-800 max-w-3xl leading-relaxed">
+                  Enhance your business intelligence by connecting this live auditing database directly to **Power BI**. 
+                  Our backend feeds pre-calculated and real-time audit summaries without manual table exports or storage concerns.
+                </p>
+              </div>
+              <div className="flex items-center shrink-0">
+                <span className="text-xs bg-orange-600 text-white font-bold px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-sm">
+                  Live Feed Status: Active
+                </span>
+              </div>
+            </div>
+
+            {/* Main grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: API URLs & Credentials (7 Columns) */}
+              <div className="lg:col-span-7 space-y-6">
+                
+                {/* REST API Feeds */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="text-brand-primary" size={20} />
+                    <h3 className="font-bold text-slate-800">1. REST API Web Connector Feeds</h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Copy any endpoint below. Power BI Desktop natively ingests these as flat datasets via the standard **Web** query connector.
+                  </p>
+
+                  <div className="space-y-3 pt-2">
+                    
+                    {/* summary Feed */}
+                    <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black uppercase tracking-wider text-brand-primary">Unified Coverage & Status Feed</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Highly Recommended</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Combines students alongside validation timestamps, statuses, and links.</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input 
+                          readOnly 
+                          value={`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`}
+                          className="flex-1 shrink text-[10px] bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                        />
+                        <button 
+                          onClick={() => handleCopy(`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`, 'summary')}
+                          className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                          title="Copy Link URL"
+                        >
+                          {copiedField === 'summary' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Students Feed */}
+                    <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-1.5">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-600">Raw Student Demographics Feed</span>
+                      <p className="text-[11px] text-slate-500">Exposes the full unedited list of batch student codes, qualification status, and locations.</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input 
+                          readOnly 
+                          value={`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`}
+                          className="flex-1 shrink text-[10px] bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                        />
+                        <button 
+                          onClick={() => handleCopy(`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`, 'students')}
+                          className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                          title="Copy Link URL"
+                        >
+                          {copiedField === 'students' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Validations Feed */}
+                    <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-1.5">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-600">Raw Audit Validation Records</span>
+                      <p className="text-[11px] text-slate-500">Detailed logs specifying which auditor validated each record, remarks, and links.</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input 
+                          readOnly 
+                          value={`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`}
+                          className="flex-1 shrink text-[10px] bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                        />
+                        <button 
+                          onClick={() => handleCopy(`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`, 'validations')}
+                          className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                          title="Copy Link URL"
+                        >
+                          {copiedField === 'validations' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Secure Access Token details */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Key className="text-brand-primary" size={20} />
+                    <h3 className="font-bold text-slate-800">2. Secure Connection Token</h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    A secret security token acts as a password to protect your analytical feeds. Keep this private.
+                  </p>
+
+                  <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between shrink-0 gap-3 items-center">
+                    <div className="w-full sm:w-auto">
+                      <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Secret Token Value</p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg font-mono text-xs text-slate-700 font-bold tracking-widest block min-w-[200px]">
+                          {showToken ? 'VP-PBI-Sec-9988-ABC' : '•••••••••••••••••••••'}
+                        </span>
+                        <button 
+                          onClick={() => setShowToken(!showToken)}
+                          className="text-[11px] text-brand-primary font-bold hover:underline px-1"
+                        >
+                          {showToken ? 'Hide' : 'Reveal'}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleCopy('VP-PBI-Sec-9988-ABC', 'raw-token')}
+                      className="btn-secondary flex items-center gap-2 whitespace-nowrap text-xs py-1.5 px-3.5 bg-white border-slate-200 hover:bg-slate-50 w-full sm:w-auto justify-center rounded-lg shadow-sm"
+                    >
+                      {copiedField === 'raw-token' ? <Check className="text-emerald-600" size={12} /> : <Copy size={12} />}
+                      Copy Raw Token
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 border border-slate-100 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
+                      <Info size={14} className="text-slate-400" />
+                      <span>Advanced Configuration Tips:</span>
+                    </div>
+                    <p className="text-slate-500 text-[11px] leading-relaxed">
+                      This token defaults to a fallback value. If you deployment demands custom token rotation, add the following setting inside your server environment variables panel (`.env` file) and restart your deployment:
+                    </p>
+                    <div className="font-mono text-[10px] bg-slate-900 text-emerald-400 p-2.5 rounded-lg flex justify-between items-center mt-1">
+                      <span>POWERBI_TOKEN="YOUR_SUPER_SECRET_STRICT_TOKEN"</span>
+                      <button 
+                        onClick={() => handleCopy('POWERBI_TOKEN="YOUR_SUPER_SECRET_STRICT_TOKEN"', 'env-pbi')}
+                        className="text-emerald-300 hover:text-white"
+                        title="Copy ENV declaration"
+                      >
+                        {copiedField === 'env-pbi' ? <Check size={12} /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct SQL Access details */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Database className="text-brand-primary" size={20} />
+                    <h3 className="font-bold text-slate-800">3. Direct PostgreSQL Database Connection</h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    If your Power BI reports demand raw relational sql schema queries, you can bypass the server REST API entirely and link Power BI directly to your Supabase PostgreSQL.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-[10px] uppercase font-black text-slate-400">Database Host (Server)</p>
+                      <p className="text-xs font-mono font-semibold text-slate-700 truncate mt-1">db.validpro-integration.supabase.co</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-[10px] uppercase font-black text-slate-400">Database Name</p>
+                      <p className="text-xs font-mono font-semibold text-slate-700 mt-1">postgres</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-[10px] uppercase font-black text-slate-400">Port (TCP)</p>
+                      <p className="text-xs font-mono font-semibold text-slate-700 mt-1">5432</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-[10px] uppercase font-black text-slate-400">Default Roles Master User</p>
+                      <p className="text-xs font-mono font-semibold text-slate-700 mt-1">postgres</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4 flex gap-3">
+                    <ShieldCheck className="text-amber-600 shrink-0 mt-0.5" size={16} />
+                    <div className="text-[11px] text-amber-900 leading-relaxed space-y-1">
+                      <p className="font-bold">Encryption Security Note:</p>
+                      <p className="opacity-80">
+                        Always toggle **Enable SSL** inside Power BI's PostgreSQL connection settings. If you do not remember your default core DB password, retrieve it via your cloud host dashboard settings.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Column: Connection Guide & Steps (5 Columns) */}
+              <div className="lg:col-span-5 space-y-6">
+                
+                {/* Visual Steps Card */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 font-sans">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="text-brand-primary" size={20} />
+                    <h3 className="font-bold text-slate-800">Connection Quick Guide</h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Follow these four direct guidelines to setup your dynamic Power BI reports in under a minute:
+                  </p>
+
+                  <div className="space-y-4 pt-1">
+                    
+                    {/* Step 1 */}
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center shrink-0 border border-brand-primary/20 text-brand-primary font-black text-xs">
+                        1
+                      </div>
+                      <div className="space-y-1 mt-0.5">
+                        <p className="text-xs font-bold text-slate-700">Open Web Data Source</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Inside Power BI Desktop, navigate to **Home** tab, click **Get Data** dropdown, and choose **Web** connector.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center shrink-0 border border-brand-primary/20 text-brand-primary font-black text-xs">
+                        2
+                      </div>
+                      <div className="space-y-1 mt-0.5">
+                        <p className="text-xs font-bold text-slate-700">Provide Feed URL</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Select the **Basic** radio button, copy the **Unified Coverage & Status Feed** link from section 1, paste it into the URL field and click **OK**.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center shrink-0 border border-brand-primary/20 text-brand-primary font-black text-xs">
+                        3
+                      </div>
+                      <div className="space-y-1 mt-0.5">
+                        <p className="text-xs font-bold text-slate-700">Choose Anonymous Access</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          In the "Access Web Content" popup dialog, choose **Anonymous** access level on the left sidebar. Since security token is query-provided, further credentials are NOT required. Click **Connect**.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center shrink-0 border border-brand-primary/20 text-brand-primary font-black text-xs">
+                        4
+                      </div>
+                      <div className="space-y-1 mt-0.5">
+                        <p className="text-xs font-bold text-slate-700">Build Your Dashboards!</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Power BI will parse the JSON result. Navigate into the **Fields** list, click **To Table** in Power Query if required, then model validation statuses such as percent covering, pending items, videos/mics and trends.
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Desktop Preview */}
+                  <div className="pt-2">
+                    <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Example Visual Chart Ideal Setup</p>
+                      <p className="text-[11px] text-slate-500 italic">
+                        "Create a doughnut chart modeling `validation_status` to visually isolate pending items, then add stacked bars charting audits grouped by center code."
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Helpful resources */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 shadow-inner flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-slate-800 text-xs">Looking for a ready-made template?</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      You can import these feeds directly as JSON tables in your PowerBI desktop dashboard models. PowerBI Service automatically handles automated scheduled cloud data refreshes every day so you stay synced!
+                    </p>
+                  </div>
+                  <div className="flex mt-4">
+                    <a 
+                      href="https://learn.microsoft.com/en-us/power-bi/connect-data/desktop-connect-to-web" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-[11px] font-bold text-brand-primary flex items-center gap-1 hover:underline hover:text-brand-hover"
+                    >
+                      <span>Read official Power BI documentation</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
           </motion.div>
         )}
       </AnimatePresence>
