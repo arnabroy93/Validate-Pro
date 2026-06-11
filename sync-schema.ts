@@ -5,8 +5,8 @@ dotenv.config();
 
 async function run() {
   const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) {
-    console.error("No DATABASE_URL found");
+  if (!dbUrl || dbUrl.includes('your-database-url') || !dbUrl.startsWith('postgres') || dbUrl.includes('your-password')) {
+    console.log("DATABASE_URL is not configured or using placeholder. Skipping automatic schema sync.");
     return;
   }
 
@@ -35,10 +35,9 @@ async function run() {
     console.log("Schema reload triggered successfully.");
   } catch (err: any) {
     if (err.message && (err.message.includes('password authentication failed') || err.message.includes('terminating connection due to administrator command'))) {
-      console.error("Authentication failed for DATABASE_URL. Please verify your Supabase database password is correct.");
-      console.error("Tip: If your password contains special characters like @, #, or :, ensure it is URL-encoded in the connection string.");
+      console.log("Database connection could not authenticate. Please double check that password matches. Schema update skipped.");
     } else {
-      console.error("Error:", err);
+      console.log("Error in automatic schema sync:", err.message || err);
     }
   } finally {
     await sql.end();

@@ -25,7 +25,8 @@ import {
   Key,
   Lock,
   Terminal,
-  Info
+  Info,
+  AlertCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -59,6 +60,13 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity' | 'powerbi'>('records');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showToken, setShowToken] = useState<boolean>(false);
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>(() => {
+    // If running in development inside AI Studio containers, suggest the production Render URL as requested
+    if (window.location.hostname.includes('ais-dev') || window.location.hostname.includes('run.app')) {
+      return 'https://validate-pro.onrender.com';
+    }
+    return window.location.origin;
+  });
 
   const handleCopy = (text: string, fieldId: string) => {
     navigator.clipboard.writeText(text);
@@ -1091,6 +1099,29 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               </div>
             </div>
 
+            <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
+              <div className="space-y-1.5 flex-1 w-full text-left">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="text-amber-600 shrink-0" size={18} />
+                  <h4 className="font-bold text-sm text-amber-950">Target Deployment Domain Configuration</h4>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed max-w-2xl">
+                  AI Studio development URLs have a protective login wall, causing Power BI Web Connector to fail with HTML error pages. 
+                  Below, enter your live Render/Custom domain URL (e.g. <code>https://validate-pro.onrender.com</code>) so the generated copy-paste links direct Power BI Desktop to your public server.
+                </p>
+              </div>
+              <div className="w-full md:w-auto shrink-0 flex flex-col gap-1">
+                <span className="text-[10px] uppercase font-black tracking-wider text-amber-600">Power BI Deployment Host</span>
+                <input 
+                  type="text"
+                  value={customBaseUrl}
+                  onChange={(e) => setCustomBaseUrl(e.target.value.trim().replace(/\/$/, ''))}
+                  placeholder="https://validate-pro.onrender.com"
+                  className="w-full md:w-72 px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-xs font-mono text-amber-950 shadow-inner focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
             {/* Main grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
@@ -1126,11 +1157,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
+                              value={`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'summary-csv')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'summary-csv')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
@@ -1139,19 +1170,42 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </div>
                         </div>
 
+                        <div className="border-t border-slate-100 pt-2"></div >
+                        
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Option B: Public CSV Link (Bypass Authentication)</span>
+                            <span className="text-[9px] text-amber-500 italic font-semibold">Easiest connection, zero query parameters</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              readOnly 
+                              value={`${customBaseUrl}/api/public-powerbi/summary?format=csv`}
+                              className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                            />
+                            <button 
+                              onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/summary?format=csv`, 'summary-public-csv')}
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              title="Copy Public CSV Link"
+                            >
+                              {copiedField === 'summary-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="border-t border-slate-100 pt-2.5">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option B: JSON Link</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option C: JSON Link</span>
                             <span className="text-[9px] text-slate-400 italic">Forces manual "Convert" steps in Power Query</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`}
+                              value={`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`, 'summary-json')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`, 'summary-json')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >
@@ -1176,11 +1230,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
+                              value={`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'students-csv')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'students-csv')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
@@ -1189,19 +1243,42 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </div>
                         </div>
 
+                        <div className="border-t border-slate-100 pt-2"></div >
+
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Option B: Public CSV Link (Bypass Authentication)</span>
+                            <span className="text-[9px] text-amber-500 italic font-semibold">Easiest connection, zero query parameters</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              readOnly 
+                              value={`${customBaseUrl}/api/public-powerbi/students?format=csv`}
+                              className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                            />
+                            <button 
+                              onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/students?format=csv`, 'students-public-csv')}
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              title="Copy Public CSV Link"
+                            >
+                              {copiedField === 'students-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="border-t border-slate-100 pt-2.5">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option B: JSON Link</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option C: JSON Link</span>
                             <span className="text-[9px] text-slate-400 italic">Requires Power Query table conversion</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`}
+                              value={`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`, 'students-json')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`, 'students-json')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >
@@ -1226,11 +1303,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
+                              value={`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'validations-csv')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'validations-csv')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
@@ -1239,19 +1316,42 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           </div>
                         </div>
 
+                        <div className="border-t border-slate-100 pt-2"></div >
+
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Option B: Public CSV Link (Bypass Authentication)</span>
+                            <span className="text-[9px] text-amber-500 italic font-semibold">Easiest connection, zero query parameters</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              readOnly 
+                              value={`${customBaseUrl}/api/public-powerbi/validations?format=csv`}
+                              className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
+                            />
+                            <button 
+                              onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/validations?format=csv`, 'validations-public-csv')}
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              title="Copy Public CSV Link"
+                            >
+                              {copiedField === 'validations-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="border-t border-slate-100 pt-2.5">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option B: JSON Link</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Option C: JSON Link</span>
                             <span className="text-[9px] text-slate-400 italic">Requires Power Query table conversion</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <input 
                               readOnly 
-                              value={`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`}
+                              value={`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`}
                               className="flex-1 shrink text-[10px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono select-all truncate"
                             />
                             <button 
-                              onClick={() => handleCopy(`${window.location.origin}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`, 'validations-json')}
+                              onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`, 'validations-json')}
                               className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >

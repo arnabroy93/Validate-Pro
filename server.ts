@@ -12,8 +12,8 @@ const __dirname = path.dirname(__filename);
 
 async function runMigrations(isManual = false) {
   const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) {
-    console.log('[Migration] DATABASE_URL not found. Skipping automatic schema updates.');
+  if (!dbUrl || dbUrl.includes('your-database-url') || !dbUrl.startsWith('postgres') || dbUrl.includes('your-password')) {
+    console.log('[Migration] DATABASE_URL is not configured or using placeholder. Skipping automatic schema updates.');
     return;
   }
 
@@ -169,10 +169,9 @@ async function runMigrations(isManual = false) {
     }
     
     if (err.message && (err.message.includes('password authentication failed') || err.message.includes('terminating connection due to administrator command'))) {
-      console.error('[Migration] Authentication failed for DATABASE_URL. Please verify your Supabase database password is correct.');
-      console.error('[Migration] Tip: If your password contains special characters like @, #, or :, ensure it is URL-encoded in the connection string.');
+      console.log('[Migration] Database connection could not authenticate. Please double check that password matches. Schema update skipped.');
     } else {
-      console.error('[Migration] Failed to execute migrations:', err.message);
+      console.log('[Migration] Migration skipped due to connection status:', err.message || err);
     }
     
     if (isManual) throw err;
@@ -222,6 +221,19 @@ export const app = express();
     : null;
 
   app.use(express.json());
+
+  // CORS and OPTIONS preflight hander for Power BI/external connectivity
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-PowerBI');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
 
   app.post('/api/admin/refresh-schema', async (req, res) => {
     if (!globalSql) return res.status(503).json({ error: 'Postgres direct connection not configured or unavailable' });
@@ -946,6 +958,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
 
   // Power BI Integration APIs
   const authenticatePowerBI = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Bypass authentication for public feeds
+    if (req.path.startsWith('/api/public-powerbi/')) {
+      return next();
+    }
+
     const customToken = process.env.POWERBI_TOKEN || 'VP-PBI-Sec-9988-ABC';
     const authHeader = req.headers.authorization;
     let token = req.query.token;
@@ -955,6 +972,16 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
 
     if (!token || token !== customToken) {
+      const format = (req.query.format as string || '').toLowerCase().trim();
+      const acceptHeader = req.headers.accept || '';
+
+      if (format === 'csv' || acceptHeader.includes('text/csv')) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.status(200).send(`\uFEFFerror_status,error_message,hint\r\nUNAUTHORIZED,"Invalid or missing Power BI integration token.","Verify that the ?token=query parameter matches the secure connection key."`);
+      }
+
       return res.status(401).json({ 
         error: 'Unauthorized: Invalid or missing Power BI integration token.',
         instructions: 'Please provide either an "Authorization: Bearer <token>" header or "?token=<token>" query parameter.'
@@ -965,7 +992,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
 
   // Convert JSON array of flat objects into standard RFC-4180 compliant CSV format
   const jsonToCsv = (items: any[]): string => {
-    if (!items || !items.length) return '';
+    if (!items || !items.length) {
+      // Return at least a placeholder spreadsheet if no data exists
+      return 'status\r\n"No records found"';
+    }
     const headers = Object.keys(items[0]);
     const csvRows = [
       headers.join(','),
@@ -977,7 +1007,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           if (typeof val === 'boolean') {
             valueAsString = val ? 'TRUE' : 'FALSE';
           } else if (typeof val === 'object') {
-            valueAsString = JSON.stringify(val);
+            valueAsString = JSON.stringify(val).replace(/\r?\n/g, ' ');
           } else {
             valueAsString = String(val);
           }
@@ -994,9 +1024,21 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     return csvRows.join('\r\n');
   };
 
-  app.get('/api/powerbi/students', authenticatePowerBI, async (req, res) => {
+  app.get(['/api/powerbi/students', '/api/public-powerbi/students'], authenticatePowerBI, async (req, res) => {
+    const format = (req.query.format as string || '').toLowerCase().trim();
+    const acceptHeader = req.headers.accept || '';
+    const isCsvRequested = format === 'csv' || acceptHeader.includes('text/csv');
+
     try {
-      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      if (!supabaseAdmin) {
+        if (isCsvRequested) {
+          res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+          res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+          return res.status(200).send('\uFEFFerror_status,error_message\r\nSERVICE_UNAVAILABLE,"Supabase admin client not initialized on server."');
+        }
+        return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      }
       
       const limit = 1000;
       let allStudents: any[] = [];
@@ -1020,21 +1062,40 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         }
       }
 
-      if (req.query.format === 'csv') {
+      if (isCsvRequested) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_students.csv');
-        return res.send(jsonToCsv(allStudents));
+        res.setHeader('Content-Disposition', 'attachment; filename=students.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.send('\uFEFF' + jsonToCsv(allStudents));
       }
 
       res.json(allStudents);
     } catch (err: any) {
+      if (isCsvRequested) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.status(200).send(`\uFEFFerror_status,error_message\r\nFAIL,"${(err.message || 'Unknown server error').replace(/"/g, '""')}"`);
+      }
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/powerbi/validations', authenticatePowerBI, async (req, res) => {
+  app.get(['/api/powerbi/validations', '/api/public-powerbi/validations'], authenticatePowerBI, async (req, res) => {
+    const format = (req.query.format as string || '').toLowerCase().trim();
+    const acceptHeader = req.headers.accept || '';
+    const isCsvRequested = format === 'csv' || acceptHeader.includes('text/csv');
+
     try {
-      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      if (!supabaseAdmin) {
+        if (isCsvRequested) {
+          res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+          res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+          return res.status(200).send('\uFEFFerror_status,error_message\r\nSERVICE_UNAVAILABLE,"Supabase admin client not initialized on server."');
+        }
+        return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      }
       
       const limit = 1000;
       let allValidations: any[] = [];
@@ -1058,21 +1119,40 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         }
       }
 
-      if (req.query.format === 'csv') {
+      if (isCsvRequested) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_validations.csv');
-        return res.send(jsonToCsv(allValidations));
+        res.setHeader('Content-Disposition', 'attachment; filename=validations.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.send('\uFEFF' + jsonToCsv(allValidations));
       }
 
       res.json(allValidations);
     } catch (err: any) {
+      if (isCsvRequested) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.status(200).send(`\uFEFFerror_status,error_message\r\nFAIL,"${(err.message || 'Unknown server error').replace(/"/g, '""')}"`);
+      }
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/powerbi/summary', authenticatePowerBI, async (req, res) => {
+  app.get(['/api/powerbi/summary', '/api/public-powerbi/summary'], authenticatePowerBI, async (req, res) => {
+    const format = (req.query.format as string || '').toLowerCase().trim();
+    const acceptHeader = req.headers.accept || '';
+    const isCsvRequested = format === 'csv' || acceptHeader.includes('text/csv');
+
     try {
-      if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      if (!supabaseAdmin) {
+        if (isCsvRequested) {
+          res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+          res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+          return res.status(200).send('\uFEFFerror_status,error_message\r\nSERVICE_UNAVAILABLE,"Supabase admin client not initialized on server."');
+        }
+        return res.status(503).json({ error: 'Supabase admin client not initialized' });
+      }
       
       // Let's get both students and validations to build a smart denormalized dashboard view!
       // This is the absolute ultimate data table for Power BI! It maps student -> validation.
@@ -1125,14 +1205,21 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         };
       }) || [];
 
-      if (req.query.format === 'csv') {
+      if (isCsvRequested) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_summary.csv');
-        return res.send(jsonToCsv(denormalized));
+        res.setHeader('Content-Disposition', 'attachment; filename=summary.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.send('\uFEFF' + jsonToCsv(denormalized));
       }
 
       res.json(denormalized);
     } catch (err: any) {
+      if (isCsvRequested) {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=error.csv');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.status(200).send(`\uFEFFerror_status,error_message\r\nFAIL,"${(err.message || 'Unknown server error').replace(/"/g, '""')}"`);
+      }
       res.status(500).json({ error: err.message });
     }
   });
