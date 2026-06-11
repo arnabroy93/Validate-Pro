@@ -16,7 +16,10 @@ import {
   Loader2,
   Mic,
   Video,
-  RefreshCcw
+  RefreshCcw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
@@ -35,6 +38,8 @@ export function Dashboard() {
   const [selectedBatch, setSelectedBatch] = useState(() => sessionStorage.getItem('val_selectedBatch') || '');
   const [validationType, setValidationType] = useState(() => sessionStorage.getItem('val_validationType') || '');
   const [studentSearch, setStudentSearch] = useState('');
+  const [sortField, setSortField] = useState<'student_code' | 'student_name'>('student_code');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const validatedBy = profile?.username || '';
 
@@ -444,13 +449,24 @@ export function Dashboard() {
   }, [data, selectedBatch, selectedCenter]);
 
   const searchedStudents = useMemo(() => {
-    if (!studentSearch) return filteredStudents;
-    const lowerSearch = studentSearch.toLowerCase();
-    return filteredStudents.filter(s => 
-      s.student_name.toLowerCase().includes(lowerSearch) || 
-      s.student_code.toLowerCase().includes(lowerSearch)
-    );
-  }, [filteredStudents, studentSearch]);
+    let result = [...filteredStudents];
+    if (studentSearch) {
+      const lowerSearch = studentSearch.toLowerCase();
+      result = result.filter(s => 
+        (s.student_name || '').toLowerCase().includes(lowerSearch) || 
+        (s.student_code || '').toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    result.sort((a, b) => {
+      const valA = String(a[sortField] || '').trim();
+      const valB = String(b[sortField] || '').trim();
+      const comparison = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [filteredStudents, studentSearch, sortField, sortOrder]);
 
   const handleValidationChange = (studentCode: string, field: keyof StudentValidation, value: any) => {
     setDirtyStudents(prev => new Set(prev).add(studentCode));
@@ -815,7 +831,7 @@ export function Dashboard() {
 
               {/* Data Table */}
               <div className="glass-card shadow-lg flex flex-col border border-brand-border">
-                <div className="px-6 py-4 border-b border-brand-border/50 flex items-center bg-white backdrop-blur-sm z-30 relative rounded-t-2xl">
+                <div className="px-6 py-4 border-b border-brand-border/50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white backdrop-blur-sm z-30 relative rounded-t-2xl">
                   <div className="relative w-full max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input 
@@ -826,13 +842,135 @@ export function Dashboard() {
                       className="w-full pl-9 pr-4 py-2 rounded-xl border border-brand-border text-sm outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all bg-slate-50"
                     />
                   </div>
+
+                  {/* Flexible Sorting Bar */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-slate-500 font-semibold select-none">Sort:</span>
+                    <div className="flex bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (sortField === 'student_code') {
+                            setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortField('student_code');
+                            setSortOrder('asc');
+                          }
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5",
+                          sortField === 'student_code' 
+                            ? "bg-white text-brand-primary shadow-sm" 
+                            : "text-slate-600 hover:text-slate-800"
+                        )}
+                      >
+                        Code
+                        {sortField === 'student_code' && (
+                          sortOrder === 'asc' ? <ArrowUp size={12} className="text-brand-primary" /> : <ArrowDown size={12} className="text-brand-primary" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (sortField === 'student_name') {
+                            setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortField('student_name');
+                            setSortOrder('asc');
+                          }
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5",
+                          sortField === 'student_name' 
+                            ? "bg-white text-brand-primary shadow-sm" 
+                            : "text-slate-600 hover:text-slate-800"
+                        )}
+                      >
+                        Name
+                        {sortField === 'student_name' && (
+                          sortOrder === 'asc' ? <ArrowUp size={12} className="text-brand-primary" /> : <ArrowDown size={12} className="text-brand-primary" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('asc')}
+                        className={cn(
+                          "px-2 py-1 rounded-md font-bold transition-all text-[10px]",
+                          sortOrder === 'asc' 
+                            ? "bg-white text-emerald-600 shadow-sm" 
+                            : "text-slate-500 hover:text-slate-700"
+                        )}
+                        title="Sort Ascending (A-Z)"
+                      >
+                        A-Z
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('desc')}
+                        className={cn(
+                          "px-2 py-1 rounded-md font-bold transition-all text-[10px]",
+                          sortOrder === 'desc' 
+                            ? "bg-white text-emerald-500 shadow-sm" 
+                            : "text-slate-500 hover:text-slate-700"
+                        )}
+                        title="Sort Descending (Z-A)"
+                      >
+                        Z-A
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div className="overflow-auto max-h-[60vh] relative">
                   <table className="w-full text-left relative">
                     <thead className="bg-[#f8fafc] border-b border-brand-border/50 sticky top-0 z-20 shadow-sm">
                       <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Student Code</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0">Student Details</th>
+                        <th 
+                          onClick={() => {
+                            if (sortField === 'student_code') {
+                              setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setSortField('student_code');
+                              setSortOrder('asc');
+                            }
+                          }}
+                          className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0 cursor-pointer hover:bg-slate-100 transition-colors select-none group"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            Student Code
+                            <ArrowUpDown size={12} className={cn(
+                              "transition-opacity duration-200",
+                              sortField === 'student_code' ? "text-brand-primary opacity-100" : "text-slate-300 opacity-0 group-hover:opacity-70"
+                            )} />
+                            {sortField === 'student_code' && (
+                              sortOrder === 'asc' ? <span className="text-[9px] text-brand-primary font-bold normal-case font-mono">(A-Z)</span> : <span className="text-[9px] text-brand-primary font-bold normal-case font-mono">(Z-A)</span>
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => {
+                            if (sortField === 'student_name') {
+                              setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setSortField('student_name');
+                              setSortOrder('asc');
+                            }
+                          }}
+                          className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-[#f8fafc] sticky top-0 cursor-pointer hover:bg-slate-100 transition-colors select-none group"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            Student Details
+                            <ArrowUpDown size={12} className={cn(
+                              "transition-opacity duration-200",
+                              sortField === 'student_name' ? "text-brand-primary opacity-100" : "text-slate-300 opacity-0 group-hover:opacity-70"
+                            )} />
+                            {sortField === 'student_name' && (
+                              sortOrder === 'asc' ? <span className="text-[9px] text-brand-primary font-bold normal-case font-mono">(A-Z)</span> : <span className="text-[9px] text-brand-primary font-bold normal-case font-mono">(Z-A)</span>
+                            )}
+                          </div>
+                        </th>
                         <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Val</th>
                         <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Re-Val</th>
                         <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase text-center tracking-wider w-16 bg-[#f8fafc] sticky top-0">Abs</th>

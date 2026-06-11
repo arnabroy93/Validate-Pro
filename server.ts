@@ -663,7 +663,7 @@ export const app = express();
       // 2. Test Direct Postgres
       if (!globalSql) {
         dbReport.postgresDirect = 'missing_env_var_or_failed';
-        dbReport.healthy = false;
+        dbReport.details.push('Direct database URL is missing or placeholder. This is optional; application operates fully over the Supabase Web API.');
       } else {
         try {
           await globalSql`SELECT 1`;
@@ -683,12 +683,11 @@ export const app = express();
           }
         } catch (pgErr: any) {
           dbReport.postgresDirect = 'failed';
-          dbReport.healthy = false;
           if (pgErr.message && pgErr.message.includes('authentication')) {
             dbReport.details.push('Postgres Auth Failed: Check your DATABASE_URL password.');
             dbReport.details.push('Tip: URL-encode special characters in your password.');
           } else {
-            dbReport.details.push(`Postgres Connection Error: ${pgErr.message}`);
+            dbReport.details.push(`Postgres Connection Error (Direct TCP access is blocked or IPv6-only): ${pgErr.message}`);
           }
         }
       }
