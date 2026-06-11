@@ -963,6 +963,37 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     next();
   };
 
+  // Convert JSON array of flat objects into standard RFC-4180 compliant CSV format
+  const jsonToCsv = (items: any[]): string => {
+    if (!items || !items.length) return '';
+    const headers = Object.keys(items[0]);
+    const csvRows = [
+      headers.join(','),
+      ...items.map(item => {
+        return headers.map(header => {
+          const val = item[header];
+          if (val === null || val === undefined) return '';
+          let valueAsString = '';
+          if (typeof val === 'boolean') {
+            valueAsString = val ? 'TRUE' : 'FALSE';
+          } else if (typeof val === 'object') {
+            valueAsString = JSON.stringify(val);
+          } else {
+            valueAsString = String(val);
+          }
+          // Escape quotes by doubling them
+          const cleanVal = valueAsString.replace(/"/g, '""');
+          // If contains comma, double-quote, or newline, wrap in double quotes
+          if (cleanVal.includes(',') || cleanVal.includes('\n') || cleanVal.includes('\r') || cleanVal.includes('"')) {
+            return `"${cleanVal}"`;
+          }
+          return cleanVal;
+        }).join(',');
+      })
+    ];
+    return csvRows.join('\r\n');
+  };
+
   app.get('/api/powerbi/students', authenticatePowerBI, async (req, res) => {
     try {
       if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin client not initialized' });
@@ -988,6 +1019,13 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           hasMore = false;
         }
       }
+
+      if (req.query.format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_students.csv');
+        return res.send(jsonToCsv(allStudents));
+      }
+
       res.json(allStudents);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1019,6 +1057,13 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           hasMore = false;
         }
       }
+
+      if (req.query.format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_validations.csv');
+        return res.send(jsonToCsv(allValidations));
+      }
+
       res.json(allValidations);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1079,6 +1124,12 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           validated_updated_at: val ? val.updated_at : null
         };
       }) || [];
+
+      if (req.query.format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=powerbi_summary.csv');
+        return res.send(jsonToCsv(denormalized));
+      }
 
       res.json(denormalized);
     } catch (err: any) {
