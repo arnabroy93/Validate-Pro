@@ -65,6 +65,7 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS mic_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS video_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validation_type TEXT;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
     await sql`UPDATE public.student_validations SET validation_type = 'N.A.' WHERE validation_type IS NULL;`;
 
     // Ensure batch_students has batch_start_date, program_name, education_qualification
@@ -1047,7 +1048,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       while (hasMore) {
         const { data, error } = await supabaseAdmin
           .from('batch_students')
-          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+          .select('*')
           .order('created_at', { ascending: false })
           .range(from, from + limit - 1);
 
@@ -1104,7 +1105,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       while (hasMore) {
         const { data, error } = await supabaseAdmin
           .from('student_validations')
-          .select('id, user_id, student_code, student_name, dob, father_name, address, ae_name, aligned_ae, center_code, batch_code, validated_by, status, remarks, recording_link, mic_on, video_on, validation_type, created_at, updated_at')
+          .select('*')
           .order('created_at', { ascending: false })
           .range(from, from + limit - 1);
 
@@ -1200,7 +1201,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           video_on: val ? val.video_on : false,
           validation_type: val ? val.validation_type : null,
           validated_at: val ? val.created_at : null,
-          validated_updated_at: val ? val.updated_at : null
+          validated_updated_at: val ? (val.updated_at || val.created_at || null) : null
         };
       }) || [];
 
