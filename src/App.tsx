@@ -16,7 +16,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload } from 'lucide-react';
 import { cn, getAvatarUrl } from './utils';
 import { Background } from './components/Background';
 
@@ -134,6 +134,19 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
             >
               <BarChart3 size={18} className="text-brand-primary" />
               <span>Power BI Connect</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('upload_logs')}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                activeTab === 'upload_logs' 
+                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+              )}
+            >
+              <Upload size={18} />
+              <span>Excel Upload Logs</span>
             </button>
           </>
         )}

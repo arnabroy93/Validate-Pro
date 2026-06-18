@@ -375,6 +375,19 @@ export function Dashboard() {
           if (insertCount === 0 && updateCount === 0) {
              toast.success('No new records to insert and no dates to update. Data already up to date.');
           } else {
+             // Log the upload
+             try {
+               await supabase.from('excel_uploads').insert({
+                 uploaded_by: user?.id,
+                 username: profile?.username || user?.email?.split('@')[0] || 'admin',
+                 filename: file.name,
+                 record_count: normalizedData.length,
+                 uploaded_at: new Date().toISOString()
+               });
+             } catch (logErr) {
+               console.error('Error logging excel upload:', logErr);
+             }
+
              toast.success(`Successfully added ${insertCount} records and updated dates for ${updateCount} records!`);
              fetchBatchStudents(); // Refresh data
           }

@@ -65,10 +65,22 @@ CREATE TABLE IF NOT EXISTS public.system_backups (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5. Excel Uploads Table
+CREATE TABLE IF NOT EXISTS public.excel_uploads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  uploaded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  username TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  record_count INTEGER NOT NULL DEFAULT 0,
+  uploaded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Allow admins to see everything, allow users to see their own entries
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_validations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.batch_students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.excel_uploads ENABLE ROW LEVEL SECURITY;
+
 
 GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;
@@ -133,3 +145,13 @@ CREATE POLICY "Users can update validations" ON public.student_validations
 
 CREATE POLICY "Admins manage all" ON public.student_validations
   FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Excel Uploads Policies
+DROP POLICY IF EXISTS "Anyone can view excel uploads" ON public.excel_uploads;
+CREATE POLICY "Anyone can view excel uploads" ON public.excel_uploads
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage excel uploads" ON public.excel_uploads;
+CREATE POLICY "Admins can manage excel uploads" ON public.excel_uploads
+  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+

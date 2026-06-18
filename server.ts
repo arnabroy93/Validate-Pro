@@ -74,6 +74,21 @@ async function runMigrations(isManual = false) {
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS program_name TEXT;`;
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS education_qualification TEXT;`;
     } catch(e) {}
+
+    // Ensure excel_uploads table exists
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS public.excel_uploads (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          uploaded_by UUID,
+          username TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          record_count INTEGER NOT NULL DEFAULT 0,
+          uploaded_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `;
+      await sql`ALTER TABLE public.excel_uploads ENABLE ROW LEVEL SECURITY;`;
+    } catch(e) {}
     
     // 3. Permissions & RLS
     await sql`ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;`;
@@ -110,6 +125,13 @@ async function runMigrations(isManual = false) {
     await sql`DROP POLICY IF EXISTS "Anyone can manage validations" ON public.student_validations;`;
     
     await sql`CREATE POLICY "Anyone can manage validations" ON public.student_validations FOR ALL USING (true);`;
+
+    try {
+      await sql`DROP POLICY IF EXISTS "Anyone can view excel uploads" ON public.excel_uploads;`;
+      await sql`CREATE POLICY "Anyone can view excel uploads" ON public.excel_uploads FOR SELECT USING (true);`;
+      await sql`DROP POLICY IF EXISTS "Anyone can manage excel uploads" ON public.excel_uploads;`;
+      await sql`CREATE POLICY "Anyone can manage excel uploads" ON public.excel_uploads FOR ALL USING (true);`;
+    } catch(e) {}
 
     // 5. Trigger for automatic profile creation
     await sql`
@@ -586,6 +608,136 @@ export const app = express();
        res.json(data || null);
     } catch(e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/admin/excel-upload-logs', async (req, res) => {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase admin SDK not available' });
+    try {
+      const { data: profiles, error: pErr } = await supabaseAdmin.from('profiles').select('id, username, email, role');
+      if (pErr) throw pErr;
+      
+      const profileMap = new Map();
+      profiles?.forEach(p => {
+        const splitPartEmail = (em: string | null | undefined) => {
+          if (!em) return '';
+          return em.split('@')[0];
+        };
+        profileMap.set(p.id, p.username || splitPartEmail(p.email) || 'Unknown');
+      });
+
+      const { data: loggedUploadsRows, error: lErr } = await supabaseAdmin.from('excel_uploads').select('*');
+      if (lErr && !lErr.message.includes("Could not find the table")) {
+        throw lErr;
+      }
+      
+      const loggedUploads = loggedUploadsRows || [];
+
+      let students: any[] = [];
+      if (globalSql) {
+        try {
+          const rows = await globalSql`SELECT uploaded_by, created_at FROM public.batch_students;`;
+          students = rows.map(r => ({
+            uploaded_by: r.uploaded_by,
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at
+          }));
+        } catch (dbErr) {
+          console.error('[Logs API] globalSql direct query failed, falling back to Supabase API:', dbErr);
+          const { data: sData, error: sErr } = await supabaseAdmin.from('batch_students').select('uploaded_by, created_at');
+          if (sErr) throw sErr;
+          students = sData || [];
+        }
+      } else {
+        const { data: sData, error: sErr } = await supabaseAdmin.from('batch_students').select('uploaded_by, created_at');
+        if (sErr) throw sErr;
+        students = sData || [];
+      }
+
+      const consolidatedBatches: Array<{ uploaded_by: string, start_time: number, end_time: number, count: number }> = [];
+      const sortedStudents = (students || [])
+        .filter(s => s.created_at)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      let currentBatch: any = null;
+      for (const student of sortedStudents) {
+        const studentTime = new Date(student.created_at).getTime();
+        const userId = student.uploaded_by || 'unknown';
+        if (!currentBatch) {
+          currentBatch = {
+            uploaded_by: userId,
+            start_time: studentTime,
+            end_time: studentTime,
+            count: 1
+          };
+        } else if (
+          currentBatch.uploaded_by === userId &&
+          (studentTime - currentBatch.end_time) <= 120000
+        ) {
+          currentBatch.end_time = studentTime;
+          currentBatch.count++;
+        } else {
+          consolidatedBatches.push(currentBatch);
+          currentBatch = {
+            uploaded_by: userId,
+            start_time: studentTime,
+            end_time: studentTime,
+            count: 1
+          };
+        }
+      }
+      if (currentBatch) {
+        consolidatedBatches.push(currentBatch);
+      }
+
+      const newLogsToInsert = [];
+      for (const batch of consolidatedBatches) {
+        const exists = loggedUploads.some(log => {
+          const uId = log.uploaded_by || 'unknown';
+          if (uId !== batch.uploaded_by) return false;
+          const logTime = new Date(log.uploaded_at).getTime();
+          return Math.abs(logTime - batch.start_time) < 300000;
+        });
+
+        if (!exists) {
+          let username = 'tanmoy.bose';
+          if (batch.uploaded_by !== 'unknown') {
+            username = profileMap.get(batch.uploaded_by) || 'admin';
+          } else {
+            const adminProf = profiles?.find(p => p.role === 'admin' || p.username === 'tanmoy.bose');
+            if (adminProf) {
+              const splitPartEmail = (em: string | null | undefined) => {
+                if (!em) return '';
+                return em.split('@')[0];
+              };
+              username = adminProf.username || splitPartEmail(adminProf.email) || 'tanmoy.bose';
+            }
+          }
+
+          const filename = 'Historical_Upload.xlsx';
+          newLogsToInsert.push({
+            uploaded_by: batch.uploaded_by === 'unknown' ? null : batch.uploaded_by,
+            username: username,
+            filename: filename,
+            record_count: batch.count,
+            uploaded_at: new Date(batch.start_time).toISOString()
+          });
+        }
+      }
+
+      if (newLogsToInsert.length > 0) {
+        const { data: inserted, error: insErr } = await supabaseAdmin.from('excel_uploads').insert(newLogsToInsert).select();
+        if (!insErr && inserted) {
+          loggedUploads.push(...inserted);
+        } else if (insErr) {
+          console.error('[Backfill] Error inserting historical logs:', insErr);
+        }
+      }
+
+      const finalLogs = loggedUploads.sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
+      res.json(finalLogs);
+    } catch (e: any) {
+      console.error('[Logs Endpoint] Error fetching upload logs:', e);
+      res.status(500).json({ error: e.message || 'Failed to fetch excel upload logs' });
     }
   });
 

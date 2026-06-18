@@ -26,7 +26,8 @@ import {
   Lock,
   Terminal,
   Info,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -34,7 +35,7 @@ import autoTable from 'jspdf-autotable';
 import { cn, formatDate, formatTime, getAvatarUrl } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' | 'powerbi' }) {
+export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'health' | 'user_activity' | 'powerbi' | 'upload_logs' }) {
   const { profile } = useAuth();
   const [validations, setValidations] = useState<StudentValidation[]>([]);
   const [allValidations, setAllValidations] = useState<StudentValidation[]>([]);
@@ -56,8 +57,10 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   const [pingStatus, setPingStatus] = useState<number | null>(null);
   const [lastBackup, setLastBackup] = useState<any>(null);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [uploadLogs, setUploadLogs] = useState<any[]>([]);
+  const [uploadLogsLoading, setUploadLogsLoading] = useState(false);
   
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity' | 'powerbi'>('records');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'records' | 'health' | 'user_activity' | 'powerbi' | 'upload_logs'>('records');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showToken, setShowToken] = useState<boolean>(false);
   const [customBaseUrl, setCustomBaseUrl] = useState<string>(() => {
@@ -85,10 +88,32 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
   // New user state
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' });
 
+  const fetchUploadLogs = async () => {
+    setUploadLogsLoading(true);
+    try {
+      const res = await fetch('/api/admin/excel-upload-logs');
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        setUploadLogs(data);
+      } else {
+        toast.error('Failed to parse excel upload logs');
+      }
+    } catch (e: any) {
+      console.error('Error fetching upload logs:', e);
+      toast.error(e.message || 'Error fetching upload logs');
+    } finally {
+      setUploadLogsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     checkDbHealth();
     fetchLastBackup();
+    
+    if (activeSubTab === 'upload_logs') {
+      fetchUploadLogs();
+    }
     
     let interval: number;
     // Set up polling for health check when active
@@ -478,10 +503,12 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           {activeSubTab === 'health' && <RefreshCcw className="text-brand-primary" size={28} />}
           {activeSubTab === 'user_activity' && <FileText className="text-brand-primary" size={28} />}
           {activeSubTab === 'powerbi' && <BarChart3 className="text-brand-primary" size={28} />}
+          {activeSubTab === 'upload_logs' && <Upload className="text-brand-primary" size={28} />}
           {activeSubTab === 'records' ? 'Validation Intelligence' : 
            activeSubTab === 'users' ? 'Account Control' : 
            activeSubTab === 'user_activity' ? 'User Activity Log' : 
-           activeSubTab === 'powerbi' ? 'Power BI Integration' : 'System Integrity'}
+           activeSubTab === 'powerbi' ? 'Power BI Integration' : 
+           activeSubTab === 'upload_logs' ? 'Excel Upload Audit Trail' : 'System Integrity'}
         </h1>
         <p className="text-slate-500 text-sm mt-1 font-medium italic opacity-70">
           {activeSubTab === 'records' && "Real-time auditing and verification history."}
@@ -489,6 +516,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
           {activeSubTab === 'user_activity' && "Track every single action and validation performed by users."}
           {activeSubTab === 'health' && "Deep-level diagnostics of infrastructure and database sync state."}
           {activeSubTab === 'powerbi' && "Expose and connect live auditing metrics to power-up Microsoft Power BI reports."}
+          {activeSubTab === 'upload_logs' && "Track and log every single Excel file uploaded by administrative users into the system."}
         </p>
       </div>
 
@@ -1568,6 +1596,177 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
 
             </div>
 
+          </motion.div>
+        )}
+
+        {activeSubTab === 'upload_logs' && (
+          <motion.div
+            key="upload_logs"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {/* Search and Refresh */}
+            <div className="flex flex-col md:flex-row gap-4 items-center">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search by Filename, Uploader, or Record Count..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
+                />
+              </div>
+              <div className="flex gap-2 w-full md:w-auto">
+                <button onClick={fetchUploadLogs} className="p-4 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm flex items-center gap-2 justify-center font-bold text-xs">
+                  <RefreshCcw size={16} className={uploadLogsLoading ? 'animate-spin' : ''} />
+                  <span>Refresh Log</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="bg-gradient-to-br from-white/80 to-teal-50/20 shadow-sm border border-brand-border/60 p-6 rounded-2xl backdrop-blur-sm">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Excel Imports</p>
+                <p className="text-3xl font-black text-brand-text mt-1">{uploadLogs.length}</p>
+                <p className="text-[11px] text-slate-500 mt-1 italic">Logged audit files in the system</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-white/80 to-teal-50/20 shadow-sm border border-brand-border/60 p-6 rounded-2xl backdrop-blur-sm">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Audited Student Records</p>
+                <p className="text-3xl font-black text-brand-text mt-1">
+                  {uploadLogs.reduce((sum, log) => sum + (log.record_count || 0), 0).toLocaleString()}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 italic">Imported and mapped to system</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-white/80 to-teal-50/20 shadow-sm border border-brand-border/60 p-6 rounded-2xl backdrop-blur-sm">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Latest Batch Import</p>
+                <p className="text-sm font-bold text-brand-text mt-3">
+                  {uploadLogs.length > 0 
+                     ? formatDate(new Date(uploadLogs[0].uploaded_at)) + ' ' + formatTime(new Date(uploadLogs[0].uploaded_at))
+                     : 'N/A'}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 italic">Most recent administrator upload</p>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white rounded-2xl border border-brand-border shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-brand-border bg-slate-50/50 flex justify-between items-center">
+                <h3 className="font-extrabold text-slate-800 tracking-tight text-sm uppercase">Audit Trail Ledger</h3>
+                <span className="text-xs bg-brand-muted text-brand-primary font-bold px-2.5 py-1 rounded-full">
+                  Admin Access Only
+                </span>
+              </div>
+              
+              <div className="overflow-x-auto">
+                {uploadLogsLoading ? (
+                  <div className="p-20 text-center flex flex-col items-center justify-center space-y-3">
+                    <RefreshCcw className="animate-spin text-brand-primary" size={32} />
+                    <p className="text-sm font-bold text-slate-400 italic">Reindexing historical logs & verifying audit integrity...</p>
+                  </div>
+                ) : uploadLogs.filter(log => {
+                  if (!searchTerm) return true;
+                  const term = searchTerm.toLowerCase();
+                  return (
+                    log.filename?.toLowerCase().includes(term) ||
+                    log.username?.toLowerCase().includes(term) ||
+                    log.record_count?.toString().includes(term)
+                  );
+                }).length === 0 ? (
+                  <div className="p-20 text-center flex flex-col items-center justify-center space-y-4">
+                    <p className="text-slate-400 text-sm font-bold italic">No matching excel upload logs found.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/40 text-slate-400 border-b border-brand-border text-[10px] font-black uppercase tracking-wider">
+                        <th className="py-4 px-6">Filename</th>
+                        <th className="py-4 px-6">Uploaded By (Admin)</th>
+                        <th className="py-4 px-6">Date & Time</th>
+                        <th className="py-4 px-6 text-center">Record Count</th>
+                        <th className="py-4 px-6 text-right">Integrity Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border/60">
+                      {uploadLogs
+                        .filter(log => {
+                          if (!searchTerm) return true;
+                          const term = searchTerm.toLowerCase();
+                          return (
+                            log.filename?.toLowerCase().includes(term) ||
+                            log.username?.toLowerCase().includes(term) ||
+                            log.record_count?.toString().includes(term)
+                          );
+                        })
+                        .map((log, index) => {
+                          const dateObj = new Date(log.uploaded_at);
+                          return (
+                            <tr key={log.id || index} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="py-4 px-6">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50">
+                                    <TableIcon size={16} />
+                                  </div>
+                                  <div>
+                                    <span className="font-extrabold text-slate-800 text-sm block">
+                                      {log.filename || 'Excel_Import.xlsx'}
+                                    </span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide block">
+                                      {log.filename?.endsWith('.csv') ? 'Comma-Separated Values' : 'Excel Spreadsheet'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex items-center gap-2.5">
+                                  <img 
+                                    src={getAvatarUrl(log.username)} 
+                                    alt={log.username} 
+                                    className="w-7 h-7 rounded-full border border-slate-200" 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                  <div>
+                                    <span className="font-bold text-slate-700 text-sm block">
+                                      {log.username}
+                                    </span>
+                                    <span className="text-[10px] uppercase font-black text-brand-primary block tracking-wider">
+                                      Administrator
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="font-semibold text-slate-600 text-sm">
+                                  {formatDate(dateObj)}
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-400">
+                                  {formatTime(dateObj)}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 text-center">
+                                <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-brand-muted text-brand-primary border border-brand-border/40">
+                                  {log.record_count} Records
+                                </span>
+                              </td>
+                              <td className="py-4 px-6 text-right">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Verified Sync
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
