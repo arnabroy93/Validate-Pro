@@ -37,6 +37,8 @@ async function runMigrations(isManual = false) {
     `;
     await sql`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;`;
     await sql`ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_username_key;`;
+    await sql`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT false;`;
+    await sql`UPDATE public.profiles SET is_disabled = false WHERE is_disabled IS NULL;`;
     
     // 2. Ensure student_validations table exists
     await sql`
@@ -358,7 +360,7 @@ export const app = express();
       // Try to select email, but fallback if column is missing
       let { data: profile, error } = await supabaseAdmin
         .from('profiles')
-        .select('email, id')
+        .select('email, id, is_disabled')
         .eq('username', username)
         .maybeSingle();
       
@@ -366,12 +368,16 @@ export const app = express();
         // Fallback for older schema
         const { data: fallback, error: fallbackErr } = await supabaseAdmin
           .from('profiles')
-          .select('id')
+          .select('id, is_disabled')
           .eq('username', username)
           .maybeSingle();
         
         if (fallbackErr || !fallback) {
           return res.status(404).json({ error: `User profile not found for "${username}".` });
+        }
+
+        if (fallback.is_disabled) {
+          return res.status(403).json({ error: 'Your account is disabled. Please contact the administrator.' });
         }
 
         // Get email from Auth
@@ -386,6 +392,10 @@ export const app = express();
       if (error || !profile) {
         console.error(`[Login] Profile search failed for "${username}":`, error?.message || 'Not found');
         return res.status(404).json({ error: `User profile not found for "${username}". Did you run Setup?` });
+      }
+
+      if (profile.is_disabled) {
+        return res.status(403).json({ error: 'Your account is disabled. Please contact the administrator.' });
       }
 
       // If email is null in DB (older rows but column exists), grab it from auth
@@ -590,6 +600,25 @@ export const app = express();
         
       if (error) throw error;
       res.json({ message: 'User role updated successfully' });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch('/api/admin/users/:id/toggle-status', async (req, res) => {
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin client not initialized' });
+    
+    const { id } = req.params;
+    const { is_disabled } = req.body;
+    
+    try {
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .update({ is_disabled })
+        .eq('id', id);
+        
+      if (error) throw error;
+      res.json({ message: 'User status updated successfully' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

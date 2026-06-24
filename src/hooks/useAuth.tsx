@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, type Profile } from '../../supabase';
 import { type User } from '@supabase/supabase-js';
+import { toast } from 'react-hot-toast';
 
 type AuthContextType = {
   user: User | null;
@@ -91,6 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('Error fetching profile:', error);
         throw error;
+      }
+
+      if (data && data.is_disabled) {
+        toast.error('This account has been disabled by the administrator.');
+        await supabase.auth.signOut().catch(() => {});
+        setProfile(null);
+        setUser(null);
+        setLoading(false);
+        return;
       }
       
       const isMasterAdmin = authUser.email === 'admin@validpro.internal' || authUser.user_metadata?.username === 'admin';

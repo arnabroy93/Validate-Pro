@@ -38,6 +38,7 @@ export type Profile = {
   username: string;
   email: string;
   role: 'admin' | 'user';
+  is_disabled?: boolean;
   created_at: string;
 };
 

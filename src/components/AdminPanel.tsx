@@ -408,6 +408,25 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
     }
   };
 
+  const handleToggleUserStatus = async (id: string, is_disabled: boolean) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_disabled })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      
+      toast.success(is_disabled ? 'User disabled (Login restricted)' : 'User enabled (Login allowed)');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredValidations = validations.filter(v => 
     (activeSubTab === 'records' ? v.validated_by?.toLowerCase().trim() === profile?.username?.toLowerCase().trim() : true) &&
     (v.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -789,15 +808,38 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                         )}
                       </div>
                       
-                      <div className="flex items-center justify-between pt-4 border-t border-brand-border/50">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest",
-                          u.role === 'admin' ? "bg-brand-primary/10 text-brand-primary" : "bg-slate-100 text-slate-500"
-                        )}>
-                          {u.role}
-                        </span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-brand-border/50">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest",
+                            u.role === 'admin' ? "bg-brand-primary/10 text-brand-primary" : "bg-slate-100 text-slate-500"
+                          )}>
+                            {u.role}
+                          </span>
+                          
+                          {u.id !== profile?.id ? (
+                            <button
+                              onClick={() => handleToggleUserStatus(u.id, !u.is_disabled)}
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all shadow-sm",
+                                u.is_disabled 
+                                  ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
+                                  : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                              )}
+                              title={u.is_disabled ? "Click to Allow login" : "Click to Restrict login"}
+                            >
+                              <Lock size={10} className={cn(u.is_disabled ? "text-red-500" : "text-emerald-500")} />
+                              <span>{u.is_disabled ? "Disabled" : "Active"}</span>
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-200 bg-emerald-50 text-emerald-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <span>Active</span>
+                            </span>
+                          )}
+                        </div>
                         
-                        <div className="flex bg-white rounded-xl p-1 border border-brand-border shadow-inner">
+                        <div className="flex bg-white rounded-xl p-1 border border-brand-border shadow-inner self-end sm:self-auto">
                           <button
                             onClick={() => u.role !== 'admin' && handleUpdateRole(u.id, 'admin')}
                             className={cn(
