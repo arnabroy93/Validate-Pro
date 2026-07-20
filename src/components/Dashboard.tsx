@@ -697,7 +697,7 @@ export function Dashboard() {
           )}
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('reset_validation'))}
-            className="btn-secondary flex items-center gap-2 bg-white text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5"
+            className="btn-secondary flex items-center gap-2 glass-card text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5"
             title="Start New Validation / Clear Form"
           >
             <RefreshCcw size={16} />
@@ -844,7 +844,7 @@ export function Dashboard() {
 
               {/* Data Table */}
               <div className="glass-card shadow-lg flex flex-col border border-brand-border">
-                <div className="px-6 py-4 border-b border-brand-border/50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white backdrop-blur-sm z-30 relative rounded-t-2xl">
+                <div className="px-6 py-4 border-b border-brand-border/50 flex flex-col md:flex-row md:items-center justify-between gap-4 glass-card backdrop-blur-sm z-30 relative rounded-t-2xl">
                   <div className="relative w-full max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input 
@@ -873,7 +873,7 @@ export function Dashboard() {
                         className={cn(
                           "px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5",
                           sortField === 'student_code' 
-                            ? "bg-white text-brand-primary shadow-sm" 
+                            ? "glass-card text-brand-primary shadow-sm" 
                             : "text-slate-600 hover:text-slate-800"
                         )}
                       >
@@ -895,7 +895,7 @@ export function Dashboard() {
                         className={cn(
                           "px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5",
                           sortField === 'student_name' 
-                            ? "bg-white text-brand-primary shadow-sm" 
+                            ? "glass-card text-brand-primary shadow-sm" 
                             : "text-slate-600 hover:text-slate-800"
                         )}
                       >
@@ -913,7 +913,7 @@ export function Dashboard() {
                         className={cn(
                           "px-2 py-1 rounded-md font-bold transition-all text-[10px]",
                           sortOrder === 'asc' 
-                            ? "bg-white text-emerald-600 shadow-sm" 
+                            ? "glass-card text-emerald-600 shadow-sm" 
                             : "text-slate-500 hover:text-slate-700"
                         )}
                         title="Sort Ascending (A-Z)"
@@ -926,7 +926,7 @@ export function Dashboard() {
                         className={cn(
                           "px-2 py-1 rounded-md font-bold transition-all text-[10px]",
                           sortOrder === 'desc' 
-                            ? "bg-white text-emerald-500 shadow-sm" 
+                            ? "glass-card text-emerald-500 shadow-sm" 
                             : "text-slate-500 hover:text-slate-700"
                         )}
                         title="Sort Descending (Z-A)"
@@ -1075,7 +1075,7 @@ export function Dashboard() {
                     <p>Showing {searchedStudents.length} of {filteredStudents.length} students.</p>
                     <div className="flex gap-2">
                       <button className="px-3 py-1 bg-brand-light border border-brand-border rounded hover:bg-brand-muted transition-colors">Prev</button>
-                      <button className="px-3 py-1 bg-white border border-brand-border rounded font-bold text-brand-hover">1</button>
+                      <button className="px-3 py-1 glass-card border border-brand-border rounded font-bold text-brand-hover">1</button>
                       <button className="px-3 py-1 bg-brand-light border border-brand-border rounded hover:bg-brand-muted transition-colors">Next</button>
                     </div>
                   </div>

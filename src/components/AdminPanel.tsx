@@ -551,13 +551,13 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             {/* Database Health Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className={cn(
-                "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm bg-white",
+                "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm glass-card",
                 pingStatus !== null ? "border-emerald-100" : "border-red-100"
               )}>
                 <div className="flex items-center gap-4">
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner",
-                    pingStatus !== null ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                    pingStatus !== null ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
                   )}>
                     <Server size={24} />
                   </div>
@@ -565,7 +565,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Node Server</p>
                     <p className={cn(
                       "text-lg font-bold",
-                      pingStatus !== null ? "text-emerald-700" : "text-red-700"
+                      pingStatus !== null ? "text-emerald-600" : "text-red-600"
                     )}>
                       {pingStatus !== null ? `${pingStatus}ms latency` : 'Offline'}
                     </p>
@@ -575,13 +575,13 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               </div>
 
               <div className={cn(
-                "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm bg-white",
+                "p-6 rounded-2xl border transition-all flex items-center justify-between shadow-sm glass-card",
                 dbStatus?.supabaseApi === 'working' ? "border-emerald-100" : "border-red-100"
               )}>
                 <div className="flex items-center gap-4">
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner",
-                    dbStatus?.supabaseApi === 'working' ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                    dbStatus?.supabaseApi === 'working' ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
                   )}>
                     <Cloud size={24} />
                   </div>
@@ -589,7 +589,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Supabase API</p>
                     <p className={cn(
                       "text-lg font-bold",
-                      dbStatus?.supabaseApi === 'working' ? "text-emerald-700" : "text-red-700"
+                      dbStatus?.supabaseApi === 'working' ? "text-emerald-600" : "text-red-600"
                     )}>
                       {dbStatus?.supabaseApi?.replace('_', ' ') || 'Authenticating...'}
                     </p>
@@ -599,7 +599,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               </div>
 
               {/* Database Storage Stats */}
-              <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col justify-center">
+              <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm glass-card flex flex-col justify-center">
                 <div className="flex items-center gap-4 mb-3">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-brand-light text-brand-primary">
                     <HardDrive size={24} />
@@ -617,7 +617,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     {dbStatus?.dbSizeBytes && (
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
-                          className={cn("h-full rounded-full transition-all duration-1000", (dbStatus.dbSizeBytes / (dbStatus.dbAvailableBytes || 500 * 1024 * 1024)) > 0.8 ? "bg-red-500" : "bg-emerald-400")} 
+                          className={cn("h-full rounded-full transition-all duration-1000", (dbStatus.dbSizeBytes / (dbStatus.dbAvailableBytes || 500 * 1024 * 1024)) > 0.8 ? "bg-red-500/100" : "bg-emerald-400")} 
                           style={{ width: `${Math.min(100, Math.max(0, (dbStatus.dbSizeBytes / (dbStatus.dbAvailableBytes || 500 * 1024 * 1024)) * 100))}%` }}
                         />
                       </div>
@@ -633,7 +633,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             </div>
 
             {/* SQL Backup Node */}
-            <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm bg-white flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="p-6 rounded-2xl border border-slate-200 transition-all shadow-sm glass-card flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner bg-slate-50 text-slate-600">
                   <Database size={24} />
@@ -663,12 +663,12 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             </div>
 
             {dbStatus?.needsSync && (
-              <div className="p-6 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm animate-pulse-light">
+              <div className="p-6 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-sm animate-pulse-light">
                 <div className="flex items-center gap-3 text-amber-800 mb-2">
                   <ShieldAlert size={20} />
                   <h3 className="font-bold">Database Schema Update Required</h3>
                 </div>
-                <p className="text-sm text-amber-700 mb-4">
+                <p className="text-sm text-amber-600 mb-4">
                   It looks like the system requires a schema update (e.g. creating the backups table). Please copy the SQL below and run it in your Supabase dashboard SQL Editor.
                 </p>
                 <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto relative group">
@@ -755,7 +755,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             </div>
 
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white rounded-2xl shadow-sm border border-brand-border h-full flex flex-col">
+              <div className="glass-card rounded-2xl shadow-sm border border-brand-border h-full flex flex-col">
                 <div className="p-6 border-b border-brand-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="text-brand-primary" size={24} />
@@ -800,7 +800,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                         {u.id !== profile?.id && (
                           <button 
                             onClick={() => handleDeleteUser(u.id)} 
-                            className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                            className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                             title="Delete User"
                           >
                             <Trash2 size={18} />
@@ -823,8 +823,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                               className={cn(
                                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all shadow-sm",
                                 u.is_disabled 
-                                  ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
-                                  : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                                  ? "bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-100" 
+                                  : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-100"
                               )}
                               title={u.is_disabled ? "Click to Allow login" : "Click to Restrict login"}
                             >
@@ -832,14 +832,14 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                               <span>{u.is_disabled ? "Disabled" : "Active"}</span>
                             </button>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-200 bg-emerald-50 text-emerald-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/100" />
                               <span>Active</span>
                             </span>
                           )}
                         </div>
                         
-                        <div className="flex bg-white rounded-xl p-1 border border-brand-border shadow-inner self-end sm:self-auto">
+                        <div className="flex glass-card rounded-xl p-1 border border-brand-border shadow-inner self-end sm:self-auto">
                           <button
                             onClick={() => u.role !== 'admin' && handleUpdateRole(u.id, 'admin')}
                             className={cn(
@@ -884,17 +884,17 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   placeholder="Universal search: Name, Code, Batch..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
+                  className="w-full glass-card border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
                 />
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={() => handleExportExcel(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-emerald-100 text-emerald-600 hover:bg-emerald-50">
+                <button onClick={() => handleExportExcel(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary glass-card py-3 border-emerald-100 text-emerald-600 hover:bg-emerald-500/10">
                   <TableIcon size={16} /> Excel
                 </button>
-                <button onClick={() => handleExportPDF(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary bg-white py-3 border-red-100 text-red-600 hover:bg-red-50">
+                <button onClick={() => handleExportPDF(filteredValidations, 'Validations')} className="flex-1 md:flex-none btn-secondary glass-card py-3 border-red-100 text-red-600 hover:bg-red-500/10">
                   <Download size={16} /> PDF
                 </button>
-                <button onClick={fetchData} className="p-3 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm">
+                <button onClick={fetchData} className="p-3 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm">
                   <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
                 </button>
               </div>
@@ -941,10 +941,10 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <td className="px-8 py-5 whitespace-nowrap">
                             <span className={cn(
                               "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm",
-                              v.status === 'Validated' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              v.status === 'ReValidated' ? "bg-blue-50 text-blue-700 border-blue-200" :
-                              v.status === 'Absent' ? "bg-amber-50 text-amber-700 border-amber-200" :
-                              "bg-rose-50 text-rose-700 border-rose-200"
+                              v.status === 'Validated' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                              v.status === 'ReValidated' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
+                              v.status === 'Absent' ? "bg-amber-500/10 text-amber-600 border-amber-500/20" :
+                              "bg-rose-500/10 text-rose-600 border-rose-500/20"
                             )}>
                               {v.status}
                             </span>
@@ -954,8 +954,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                               <div className="flex items-center gap-2">
                                 <span className={cn(
                                   "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                                  v.validation_type === 'Online' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                  v.validation_type === 'Offline' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  v.validation_type === 'Online' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                                  v.validation_type === 'Offline' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
                                   "bg-slate-50 text-slate-700 border-slate-300" 
                                 )}>
                                   {v.validation_type || 'N/A'}
@@ -1016,7 +1016,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   placeholder="Filter by Name, Code, Batch, or Validated By..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
+                  className="w-full glass-card border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
                 />
               </div>
               <div className="flex gap-2 w-full md:w-auto">
@@ -1024,17 +1024,17 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   <div className="flex flex-col justify-center px-2 mr-2 border-r border-slate-200">
                     <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Export</span>
                   </div>
-                  <button onClick={() => handleExportExcel(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-emerald-600 hover:bg-emerald-50 hover:shadow-sm transition-all flex items-center gap-2">
+                  <button onClick={() => handleExportExcel(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-emerald-600 hover:bg-emerald-500/10 hover:shadow-sm transition-all flex items-center gap-2">
                     <TableIcon size={16} /><span className="text-xs font-bold">Excel</span>
                   </button>
-                  <button onClick={() => handleExportCSV(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-sky-600 hover:bg-sky-50 hover:shadow-sm transition-all flex items-center gap-2">
+                  <button onClick={() => handleExportCSV(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-sky-600 hover:bg-sky-500/10 hover:shadow-sm transition-all flex items-center gap-2">
                     <TableIcon size={16} /><span className="text-xs font-bold">CSV</span>
                   </button>
-                  <button onClick={() => handleExportPDF(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-red-600 hover:bg-red-50 hover:shadow-sm transition-all flex items-center gap-2">
+                  <button onClick={() => handleExportPDF(getExportData(), 'User_Activity')} className="p-2.5 rounded-xl bg-white/80 text-red-600 hover:bg-red-500/10 hover:shadow-sm transition-all flex items-center gap-2">
                     <Download size={16} /><span className="text-xs font-bold">PDF</span>
                   </button>
                 </div>
-                <button onClick={fetchData} className="p-3 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm">
+                <button onClick={fetchData} className="p-3 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm">
                   <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
                 </button>
               </div>
@@ -1093,9 +1093,9 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           <td className="px-6 py-5 whitespace-nowrap">
                             <span className={cn(
                               "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm",
-                              v.status === 'Completed' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              v.status === 'Partial' ? "bg-amber-50 text-amber-700 border-amber-200" :
-                              "bg-rose-50 text-rose-700 border-rose-200"
+                              v.status === 'Completed' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                              v.status === 'Partial' ? "bg-amber-500/10 text-amber-600 border-amber-500/20" :
+                              "bg-rose-500/10 text-rose-600 border-rose-500/20"
                             )}>
                               {v.status}
                             </span>
@@ -1169,7 +1169,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
+            <div className="bg-amber-500/10 border border-amber-500/20 p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
               <div className="space-y-1.5 flex-1 w-full text-left">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="text-amber-600 shrink-0" size={18} />
@@ -1187,7 +1187,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   value={customBaseUrl}
                   onChange={(e) => setCustomBaseUrl(e.target.value.trim().replace(/\/$/, ''))}
                   placeholder="https://validate-pro.onrender.com"
-                  className="w-full md:w-72 px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-xs font-mono text-amber-950 shadow-inner focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full md:w-72 px-3 py-1.5 rounded-lg border border-amber-300 glass-card text-xs font-mono text-amber-950 shadow-inner focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
               </div>
             </div>
@@ -1199,7 +1199,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               <div className="lg:col-span-7 space-y-6">
                 
                 {/* REST API Feeds */}
-                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                <div className="p-6 rounded-2xl border border-slate-200 glass-card shadow-sm space-y-4">
                   <div className="flex items-center gap-2">
                     <Terminal className="text-brand-primary" size={20} />
                     <h3 className="font-bold text-slate-800">1. REST API Web Connector Feeds</h3>
@@ -1214,11 +1214,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-2.5">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-black uppercase tracking-wider text-brand-primary">Unified Coverage & Status Feed</span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full">Highly Recommended</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-600 font-bold px-2.5 py-0.5 rounded-full">Highly Recommended</span>
                       </div>
                       <p className="text-[11px] text-slate-500">Combines student demographics alongside corresponding audit validation statuses.</p>
                       
-                      <div className="space-y-2.5 bg-white p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
+                      <div className="space-y-2.5 glass-card p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">Option A: CSV Link (Recommended for Power BI)</span>
@@ -1232,7 +1232,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'summary-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
                               {copiedField === 'summary-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1255,7 +1255,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/summary?format=csv`, 'summary-public-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy Public CSV Link"
                             >
                               {copiedField === 'summary-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1276,7 +1276,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/summary?token=${'VP-PBI-Sec-9988-ABC'}`, 'summary-json')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >
                               {copiedField === 'summary-json' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1291,7 +1291,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <span className="text-xs font-black uppercase tracking-wider text-slate-600">Raw Student Demographics Feed</span>
                       <p className="text-[11px] text-slate-500">Exposes the full unedited list of batch student codes, qualification status, and locations.</p>
                       
-                      <div className="space-y-2.5 bg-white p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
+                      <div className="space-y-2.5 glass-card p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">Option A: CSV Link (Recommended for Power BI)</span>
@@ -1305,7 +1305,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'students-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
                               {copiedField === 'students-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1328,7 +1328,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/students?format=csv`, 'students-public-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy Public CSV Link"
                             >
                               {copiedField === 'students-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1349,7 +1349,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/students?token=${'VP-PBI-Sec-9988-ABC'}`, 'students-json')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >
                               {copiedField === 'students-json' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1364,7 +1364,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                       <span className="text-xs font-black uppercase tracking-wider text-slate-600">Raw Audit Validation Records</span>
                       <p className="text-[11px] text-slate-500">Detailed logs specifying which auditor validated each record, remarks, and links.</p>
                       
-                      <div className="space-y-2.5 bg-white p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
+                      <div className="space-y-2.5 glass-card p-3.5 rounded-xl border border-slate-200/60 shadow-sm">
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">Option A: CSV Link (Recommended for Power BI)</span>
@@ -1378,7 +1378,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}&format=csv`, 'validations-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy CSV Link"
                             >
                               {copiedField === 'validations-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1401,7 +1401,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/public-powerbi/validations?format=csv`, 'validations-public-csv')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy Public CSV Link"
                             >
                               {copiedField === 'validations-public-csv' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1422,7 +1422,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             />
                             <button 
                               onClick={() => handleCopy(`${customBaseUrl}/api/powerbi/validations?token=${'VP-PBI-Sec-9988-ABC'}`, 'validations-json')}
-                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
+                              className="btn-secondary h-8 w-8 p-0 flex items-center justify-center shrink-0 glass-card hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg shadow-sm"
                               title="Copy JSON Link"
                             >
                               {copiedField === 'validations-json' ? <Check className="text-emerald-600" size={14} /> : <Copy size={14} />}
@@ -1436,7 +1436,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 </div>
 
                 {/* Secure Access Token details */}
-                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                <div className="p-6 rounded-2xl border border-slate-200 glass-card shadow-sm space-y-4">
                   <div className="flex items-center gap-2">
                     <Key className="text-brand-primary" size={20} />
                     <h3 className="font-bold text-slate-800">2. Secure Connection Token</h3>
@@ -1449,7 +1449,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     <div className="w-full sm:w-auto">
                       <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Secret Token Value</p>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg font-mono text-xs text-slate-700 font-bold tracking-widest block min-w-[200px]">
+                        <span className="glass-card border border-slate-200 px-3 py-1.5 rounded-lg font-mono text-xs text-slate-700 font-bold tracking-widest block min-w-[200px]">
                           {showToken ? 'VP-PBI-Sec-9988-ABC' : '•••••••••••••••••••••'}
                         </span>
                         <button 
@@ -1462,7 +1462,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     </div>
                     <button
                       onClick={() => handleCopy('VP-PBI-Sec-9988-ABC', 'raw-token')}
-                      className="btn-secondary flex items-center gap-2 whitespace-nowrap text-xs py-1.5 px-3.5 bg-white border-slate-200 hover:bg-slate-50 w-full sm:w-auto justify-center rounded-lg shadow-sm"
+                      className="btn-secondary flex items-center gap-2 whitespace-nowrap text-xs py-1.5 px-3.5 glass-card border-slate-200 hover:bg-slate-50 w-full sm:w-auto justify-center rounded-lg shadow-sm"
                     >
                       {copiedField === 'raw-token' ? <Check className="text-emerald-600" size={12} /> : <Copy size={12} />}
                       Copy Raw Token
@@ -1491,7 +1491,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                 </div>
 
                 {/* Direct SQL Access details */}
-                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                <div className="p-6 rounded-2xl border border-slate-200 glass-card shadow-sm space-y-4">
                   <div className="flex items-center gap-2">
                     <Database className="text-brand-primary" size={20} />
                     <h3 className="font-bold text-slate-800">3. Direct PostgreSQL Database Connection</h3>
@@ -1519,7 +1519,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4 flex gap-3">
+                  <div className="rounded-xl border border-amber-100 bg-amber-500/10/40 p-4 flex gap-3">
                     <ShieldCheck className="text-amber-600 shrink-0 mt-0.5" size={16} />
                     <div className="text-[11px] text-amber-900 leading-relaxed space-y-1">
                       <p className="font-bold">Encryption Security Note:</p>
@@ -1536,7 +1536,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
               <div className="lg:col-span-5 space-y-6">
                 
                 {/* Visual Steps Card */}
-                <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 font-sans">
+                <div className="p-6 rounded-2xl border border-slate-200 glass-card shadow-sm space-y-4 font-sans">
                   <div className="flex items-center gap-2">
                     <HelpCircle className="text-brand-primary" size={20} />
                     <h3 className="font-bold text-slate-800">Connection Quick Guide</h3>
@@ -1658,11 +1658,11 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                   placeholder="Search by Filename, Uploader, or Record Count..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
+                  className="w-full glass-card border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
                 />
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={fetchUploadLogs} className="p-4 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm flex items-center gap-2 justify-center font-bold text-xs">
+                <button onClick={fetchUploadLogs} className="p-4 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm flex items-center gap-2 justify-center font-bold text-xs">
                   <RefreshCcw size={16} className={uploadLogsLoading ? 'animate-spin' : ''} />
                   <span>Refresh Log</span>
                 </button>
@@ -1697,7 +1697,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-2xl border border-brand-border shadow-sm overflow-hidden">
+            <div className="glass-card rounded-2xl border border-brand-border shadow-sm overflow-hidden">
               <div className="p-6 border-b border-brand-border bg-slate-50/50 flex justify-between items-center">
                 <h3 className="font-extrabold text-slate-800 tracking-tight text-sm uppercase">Audit Trail Ledger</h3>
                 <span className="text-xs bg-brand-muted text-brand-primary font-bold px-2.5 py-1 rounded-full">
@@ -1751,7 +1751,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                             <tr key={log.id || index} className="hover:bg-slate-50/30 transition-colors">
                               <td className="py-4 px-6">
                                 <div className="flex items-center gap-3">
-                                  <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50">
+                                  <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-100/50">
                                     <TableIcon size={16} />
                                   </div>
                                   <div>
@@ -1796,8 +1796,8 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                                 </span>
                               </td>
                               <td className="py-4 px-6 text-right">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/50">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20/50">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/100 animate-pulse" />
                                   Verified Sync
                                 </span>
                               </td>

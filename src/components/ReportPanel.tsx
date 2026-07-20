@@ -440,13 +440,13 @@ export function ReportPanel() {
                 placeholder="Search by Center or Batch Code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
+                className="w-full glass-card border border-brand-border rounded-2xl py-4 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all"
               />
             </div>
             <select
               value={programFilter}
               onChange={(e) => setProgramFilter(e.target.value)}
-              className="bg-white border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
+              className="glass-card border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
             >
               <option value="All">All Programs</option>
               {uniquePrograms.map(p => (
@@ -456,7 +456,7 @@ export function ReportPanel() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-white border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48"
+              className="glass-card border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48"
             >
               <option value="All">All Statuses</option>
               <option value="Validated">Validated</option>
@@ -468,7 +468,7 @@ export function ReportPanel() {
             <select
               value={validatedByFilter}
               onChange={(e) => setValidatedByFilter(e.target.value)}
-              className="bg-white border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
+              className="glass-card border border-brand-border rounded-2xl py-4 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-muted/50 shadow-sm transition-all w-48 text-ellipsis"
             >
               <option value="All">All Validators</option>
               {uniqueValidatedBy.map(u => (
@@ -482,18 +482,18 @@ export function ReportPanel() {
                 <span className="text-sm font-bold text-slate-500 mr-2 border-r border-slate-300 pr-4">
                   {selectedBatchesForExport.size} Selected
                 </span>
-                <button onClick={handleExportSummaryCSV} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">
+                <button onClick={handleExportSummaryCSV} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-100">
                   <TableIcon size={14} /> CSV
                 </button>
-                <button onClick={handleExportSummaryExcel} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                <button onClick={handleExportSummaryExcel} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-100">
                   <TableIcon size={14} /> Excel
                 </button>
-                <button onClick={handleExportSummaryPDF} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100">
+                <button onClick={handleExportSummaryPDF} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-100">
                   <Download size={14} /> PDF
                 </button>
               </>
             )}
-            <button onClick={fetchData} className="p-3 bg-white text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm ml-2">
+            <button onClick={fetchData} className="p-3 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm ml-2">
               <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
@@ -590,7 +590,7 @@ export function ReportPanel() {
                          <p className="text-[11px] text-slate-500 font-mono font-bold">{formatDate(s.latest_timestamp)}</p>
                          <p className="text-[10px] text-slate-400 font-mono">{formatTime(s.latest_timestamp)}</p>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap sticky right-0 bg-white shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
+                      <td className="px-6 py-4 whitespace-nowrap sticky right-0 glass-card shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
                          <button 
                            onClick={() => setSelectedBatch(s.batch_code)}
                            className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"
@@ -633,19 +633,19 @@ export function ReportPanel() {
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-brand-bg w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/50"
             >
-              <div className="p-6 border-b border-brand-border bg-white flex justify-between items-center shrink-0">
+              <div className="p-6 border-b border-brand-border glass-card flex justify-between items-center shrink-0">
                 <div>
                   <h2 className="text-xl font-bold text-brand-text">Detailed Report: {selectedBatch}</h2>
                   <p className="text-xs text-slate-500 font-medium mt-1">Found {selectedBatchData.length} records</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => handleExportCSV(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">
+                  <button onClick={() => handleExportCSV(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-100">
                     <TableIcon size={14} /> CSV
                   </button>
-                  <button onClick={() => handleExportExcel(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                  <button onClick={() => handleExportExcel(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-100">
                     <TableIcon size={14} /> Excel
                   </button>
-                  <button onClick={() => handleExportPDF(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100">
+                  <button onClick={() => handleExportPDF(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-100">
                     <Download size={14} /> PDF
                   </button>
                   <div className="w-px h-6 bg-slate-200 mx-1"></div>
@@ -718,7 +718,7 @@ export function ReportPanel() {
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
-                              v.mic_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                              v.mic_on ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
                             )}>
                               {v.mic_on ? 'Turned On' : 'Not Turn On'}
                             </span>
@@ -726,7 +726,7 @@ export function ReportPanel() {
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
-                              v.video_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                              v.video_on ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
                             )}>
                               {v.video_on ? 'Turned On' : 'Not Turn On'}
                             </span>
@@ -734,11 +734,11 @@ export function ReportPanel() {
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
-                              v.status === 'Validated' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              v.status === 'ReValidated' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                              v.status === 'Validated' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                              v.status === 'ReValidated' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
                               v.status === 'Absent' ? "bg-slate-50 text-slate-700 border-slate-300" :
-                              v.status === 'Rejected' ? "bg-rose-50 text-rose-700 border-rose-200" :
-                              "bg-amber-50 text-amber-700 border-amber-200" // Pending
+                              v.status === 'Rejected' ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
+                              "bg-amber-500/10 text-amber-600 border-amber-500/20" // Pending
                             )}>
                               {v.status || 'Pending'}
                             </span>
@@ -746,8 +746,8 @@ export function ReportPanel() {
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
-                              v.validation_type === 'Online' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              v.validation_type === 'Offline' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                              v.validation_type === 'Online' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                              v.validation_type === 'Offline' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
                               "bg-slate-50 text-slate-700 border-slate-300" 
                             )}>
                               {v.validation_type || 'N.A.'}

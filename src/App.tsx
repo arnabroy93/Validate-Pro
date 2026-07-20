@@ -14,9 +14,10 @@ import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { ReportPanel } from './components/ReportPanel';
+import { Insights } from './components/Insights';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload, PieChart } from 'lucide-react';
 import { cn, getAvatarUrl } from './utils';
 import { Background } from './components/Background';
 
@@ -24,15 +25,28 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 
   const { profile, signOut } = useAuth();
   const isAdmin = profile?.role === 'admin';
-
+  
   return (
-    <aside className="w-64 bg-white/40 backdrop-blur-xl border-r border-white/40 flex flex-col h-screen fixed left-0 top-0 z-10 shadow-[4px_0_24px_0_rgba(13,148,136,0.05)]">
+    <aside className="w-64 glass-panel flex flex-col h-screen fixed left-0 top-0 z-10 !border-y-0 !border-l-0 !rounded-none">
       <div className="p-6 flex items-center gap-3">
         <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-8 h-8 rounded-lg shadow-sm" />
         <span className="font-bold text-xl tracking-tight text-brand-text">Validate-Pro</span>
       </div>
       
       <nav className="flex-1 px-4 space-y-1">
+        
+            <button
+          onClick={() => setActiveTab('insights')}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+            activeTab === 'insights' 
+              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+          )}
+        >
+          <PieChart size={18} />
+          <span>Insights</span>
+        </button>
         <button
           onClick={() => {
             if (activeTab === 'dashboard') {
@@ -78,11 +92,27 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
           <span>Reports</span>
         </button>
 
+        
+
         {isAdmin && (
           <>
             <div className="pt-4 pb-2 px-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-brand-primary/50">Administration</p>
             </div>
+            <button
+              onClick={() => setActiveTab('global_insights')}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                activeTab === 'global_insights' 
+                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+              )}
+            >
+              <PieChart size={18} className="text-brand-primary" />
+              <span>Global Insights</span>
+            </button>
+
+            
 
             <button
               onClick={() => setActiveTab('users')}
@@ -166,9 +196,10 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
             <p className="text-[10px] text-brand-text/50 font-black uppercase tracking-widest">{profile?.role}</p>
           </div>
         </div>
+        
         <button
           onClick={signOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-rose-500 hover:bg-rose-50/50 transition-all font-bold text-sm"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all font-bold text-sm"
         >
           <LogOut size={18} />
           <span>Logout</span>
@@ -180,7 +211,7 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 
 function MainContent() {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('insights');
 
   if (loading) {
     return (
@@ -223,6 +254,28 @@ function MainContent() {
               className="p-8"
             >
               <ReportPanel />
+            </motion.div>
+          ) : activeTab === 'insights' ? (
+            <motion.div
+              key="insights"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 flex-1"
+            >
+              <Insights isAdminView={false} />
+            </motion.div>
+          ) : activeTab === 'global_insights' ? (
+            <motion.div
+              key="global_insights"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 flex-1"
+            >
+              <Insights isAdminView={true} />
             </motion.div>
           ) : (
             <motion.div

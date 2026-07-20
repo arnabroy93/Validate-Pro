@@ -230,15 +230,15 @@ export function LoginPage() {
               <div className="flex flex-col gap-3 items-center p-4 bg-white/40 rounded-2xl border border-white/50 shadow-sm backdrop-blur-md">
                   <div className="flex items-center gap-6">
                    <div className="flex items-center gap-2">
-                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.url ? "bg-emerald-500 shadow-emerald-500/50" : "bg-rose-500 shadow-rose-500/50")} />
+                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.url ? "bg-emerald-500/100 shadow-emerald-500/50" : "bg-rose-500/100 shadow-rose-500/50")} />
                      <span className="text-[10px] text-brand-text/70 font-black uppercase tracking-wider">URL</span>
                    </div>
                    <div className="flex items-center gap-2">
-                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.serviceKey ? "bg-emerald-500 shadow-emerald-500/50" : "bg-rose-500 shadow-rose-500/50")} />
+                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.serviceKey ? "bg-emerald-500/100 shadow-emerald-500/50" : "bg-rose-500/100 shadow-rose-500/50")} />
                      <span className="text-[10px] text-brand-text/70 font-black uppercase tracking-wider">Service Key</span>
                    </div>
                    <div className="flex items-center gap-2">
-                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.anonKey ? "bg-emerald-500 shadow-emerald-500/50" : "bg-rose-500 shadow-rose-500/50")} />
+                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", healthStatus?.config.anonKey ? "bg-emerald-500/100 shadow-emerald-500/50" : "bg-rose-500/100 shadow-rose-500/50")} />
                      <span className="text-[10px] text-brand-text/70 font-black uppercase tracking-wider">Anon Key</span>
                    </div>
                    <button 
@@ -251,7 +251,7 @@ export function LoginPage() {
                  </div>
                  
                  {(!healthStatus?.config.url || !healthStatus?.config.serviceKey || !healthStatus?.config.anonKey) && (
-                   <div className="px-3 py-2 bg-rose-50 border border-rose-100 rounded-xl mt-1">
+                   <div className="px-3 py-2 bg-rose-500/10 border border-rose-100 rounded-xl mt-1">
                      <p className="text-[10px] text-rose-600 font-bold leading-tight">
                        Missing Supabase configuration in Settings &gt; Secrets.
                      </p>
