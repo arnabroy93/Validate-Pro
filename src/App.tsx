@@ -10,21 +10,23 @@
 
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { FeaturesProvider, useFeatures } from './hooks/useFeatures';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { Insights } from './components/Insights';
+import { FeatureControls } from './components/FeatureControls';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload, PieChart } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload, PieChart } from 'lucide-react';
 import { cn, getAvatarUrl } from './utils';
 import { Background } from './components/Background';
 
 function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
-
   const { profile, signOut } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const { features } = useFeatures();
   
   return (
     <aside className="w-64 glass-panel flex flex-col h-screen fixed left-0 top-0 z-10 !border-y-0 !border-l-0 !rounded-none">
@@ -35,149 +37,181 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
       
       <nav className="flex-1 px-4 space-y-1">
         
-            <button
-          onClick={() => setActiveTab('insights')}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-            activeTab === 'insights' 
-              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-          )}
-        >
-          <PieChart size={18} />
-          <span>Insights</span>
-        </button>
+            {features.insights && (
         <button
-          onClick={() => {
-            if (activeTab === 'dashboard') {
-              window.dispatchEvent(new CustomEvent('reset_validation'));
-            } else {
-              setActiveTab('dashboard');
-            }
-          }}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-            activeTab === 'dashboard' 
-              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-          )}
-        >
-          <LayoutDashboard size={18} />
-          <span>Validation</span>
-        </button>
+                  onClick={() => setActiveTab('insights')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                    activeTab === 'insights' 
+                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                  )}
+                >
+                  <PieChart size={18} />
+                  <span>Insights</span>
+                </button>
+      )}
+        {features.validation && (
+        <button
+                  onClick={() => {
+                    if (activeTab === 'dashboard') {
+                      window.dispatchEvent(new CustomEvent('reset_validation'));
+                    } else {
+                      setActiveTab('dashboard');
+                    }
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                    activeTab === 'dashboard' 
+                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                  )}
+                >
+                  <LayoutDashboard size={18} />
+                  <span>Validation</span>
+                </button>
+      )}
 
+        {features.records && (
         <button
-          onClick={() => setActiveTab('records')}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-            activeTab === 'records' 
-              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-          )}
-        >
-          <FileText size={18} />
-          <span>My Activity</span>
-        </button>
+                  onClick={() => setActiveTab('records')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                    activeTab === 'records' 
+                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                  )}
+                >
+                  <FileText size={18} />
+                  <span>My Activity</span>
+                </button>
+      )}
 
+        {features.reports && (
         <button
-          onClick={() => setActiveTab('reports')}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-            activeTab === 'reports' 
-              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-          )}
-        >
-          <FileText size={18} />
-          <span>Reports</span>
-        </button>
+                  onClick={() => setActiveTab('reports')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                    activeTab === 'reports' 
+                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                  )}
+                >
+                  <FileText size={18} />
+                  <span>Reports</span>
+                </button>
+      )}
 
         
 
         {isAdmin && (
           <>
+            <button
+            onClick={() => setActiveTab('features_config')}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+              activeTab === 'features_config' 
+                ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+            )}
+          >
+            <Settings size={18} />
+            <span>Feature Controls</span>
+          </button>
             <div className="pt-4 pb-2 px-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-brand-primary/50">Administration</p>
             </div>
+            {features.global_insights && (
             <button
-              onClick={() => setActiveTab('global_insights')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'global_insights' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <PieChart size={18} className="text-brand-primary" />
-              <span>Global Insights</span>
-            </button>
+                          onClick={() => setActiveTab('global_insights')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'global_insights' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <PieChart size={18} className="text-brand-primary" />
+                          <span>Global Insights</span>
+                        </button>
+          )}
 
             
 
+            {features.users && (
             <button
-              onClick={() => setActiveTab('users')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'users' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <Users size={18} />
-              <span>User Management</span>
-            </button>
+                          onClick={() => setActiveTab('users')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'users' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <Users size={18} />
+                          <span>User Management</span>
+                        </button>
+          )}
 
+            {features.user_activity && (
             <button
-              onClick={() => setActiveTab('user_activity')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'user_activity' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <FileText size={18} />
-              <span>User Activity</span>
-            </button>
+                          onClick={() => setActiveTab('user_activity')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'user_activity' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <FileText size={18} />
+                          <span>User Activity</span>
+                        </button>
+          )}
 
+            {features.health && (
             <button
-              onClick={() => setActiveTab('health')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'health' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <RefreshCcw size={18} />
-              <span>System Health</span>
-            </button>
+                          onClick={() => setActiveTab('health')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'health' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <RefreshCcw size={18} />
+                          <span>System Health</span>
+                        </button>
+          )}
 
+            {features.powerbi && (
             <button
-              onClick={() => setActiveTab('powerbi')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'powerbi' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <BarChart3 size={18} className="text-brand-primary" />
-              <span>Power BI Connect</span>
-            </button>
+                          onClick={() => setActiveTab('powerbi')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'powerbi' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <BarChart3 size={18} className="text-brand-primary" />
+                          <span>Power BI Connect</span>
+                        </button>
+          )}
 
+            {features.upload_logs && (
             <button
-              onClick={() => setActiveTab('upload_logs')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                activeTab === 'upload_logs' 
-                  ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                  : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-              )}
-            >
-              <Upload size={18} />
-              <span>Excel Upload Logs</span>
-            </button>
+                          onClick={() => setActiveTab('upload_logs')}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
+                            activeTab === 'upload_logs' 
+                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
+                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
+                          )}
+                        >
+                          <Upload size={18} />
+                          <span>Excel Upload Logs</span>
+                        </button>
+          )}
           </>
         )}
       </nav>
@@ -277,6 +311,17 @@ function MainContent() {
             >
               <Insights isAdminView={true} />
             </motion.div>
+          ) : activeTab === 'features_config' ? (
+            <motion.div
+              key="features_config"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 flex-1"
+            >
+              <FeatureControls />
+            </motion.div>
           ) : (
             <motion.div
               key={activeTab}
@@ -308,9 +353,11 @@ function MainContent() {
 export default function App() {
   return (
     <AuthProvider>
+      <FeaturesProvider>
       <Background />
       <MainContent />
       <Toaster position="top-right" />
+    </FeaturesProvider>
     </AuthProvider>
   );
 }
