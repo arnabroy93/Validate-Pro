@@ -30,7 +30,10 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
   
   return (
     <aside className="w-64 glass-panel flex flex-col h-screen fixed left-0 top-0 z-10 !border-y-0 !border-l-0 !rounded-none">
-      <div className="p-6 flex items-center gap-3">
+      <div 
+        onClick={() => setActiveTab('dashboard')}
+        className="p-6 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+      >
         <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-8 h-8 rounded-lg shadow-sm" />
         <span className="font-bold text-xl tracking-tight text-brand-text">Validate-Pro</span>
       </div>
@@ -245,7 +248,7 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 
 function MainContent() {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('insights');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   if (loading) {
     return (
