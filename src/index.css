@@ -151,3 +151,17 @@
   100% { transform: translate(0px, 0px) scale(1); }
 }
 
+/* Premium Lift and Background Tint Animation for Table Rows */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.25s ease !important;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px 0 var(--glass-shadow) !important;
+  background-color: var(--brand-light) !important;
+  position: relative;
+  z-index: 10;
+}
+
+

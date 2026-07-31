@@ -537,7 +537,7 @@ export function ReportPanel() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
-                      className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}
+                      className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover-lift group backdrop-blur-sm")}
                     >
                       <td className="px-6 py-4 text-center">
                         <input 
@@ -691,7 +691,7 @@ export function ReportPanel() {
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
                           key={v.id} 
-                          className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover:bg-brand-light transition-colors backdrop-blur-sm")}
+                          className={cn(idx % 2 === 0 ? "bg-white/60" : "bg-white/40", "hover-lift backdrop-blur-sm")}
                         >
                           <td className="px-6 py-3 whitespace-nowrap">
                             <span className="text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded font-mono font-bold border border-slate-200">{v.student_code}</span>

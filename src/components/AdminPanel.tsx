@@ -921,7 +921,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
                           key={v.id} 
-                          className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors group backdrop-blur-sm")}
+                          className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover-lift group backdrop-blur-sm")}
                         >
                           <td className="px-8 py-5 whitespace-nowrap">
                             <p className="font-bold text-sm text-brand-text mb-0.5">{v.student_name}</p>
@@ -1075,7 +1075,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                           key={`${v.id}-${idx}`} 
                           className={cn(
                             idx % 2 === 0 ? "bg-white/20" : "bg-white/10", 
-                            "hover:bg-brand-light transition-colors group backdrop-blur-sm",
+                            "hover-lift group backdrop-blur-sm",
                             selectedActivities.has(v.id!) ? 'bg-brand-muted/40' : ''
                           )}
                         >
@@ -1748,7 +1748,7 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
                         .map((log, index) => {
                           const dateObj = new Date(log.uploaded_at);
                           return (
-                            <tr key={log.id || index} className="hover:bg-slate-50/30 transition-colors">
+                            <tr key={log.id || index} className="hover-lift">
                               <td className="py-4 px-6">
                                 <div className="flex items-center gap-3">
                                   <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-100/50">

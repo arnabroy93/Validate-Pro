@@ -247,6 +247,46 @@ export const app = express();
 
   app.use(express.json());
 
+  // Live presence state
+  interface PresenceInfo {
+    userId: string;
+    username: string;
+    centerCode: string;
+    batchCode: string;
+    lastActive: number;
+  }
+  const activePresence = new Map<string, PresenceInfo>();
+
+  app.post('/api/presence/heartbeat', (req, res) => {
+    const { userId, username, centerCode, batchCode } = req.body;
+    if (!userId || !username) {
+      return res.status(400).json({ error: 'userId and username are required' });
+    }
+    activePresence.set(userId, {
+      userId,
+      username,
+      centerCode: centerCode || '',
+      batchCode: batchCode || '',
+      lastActive: Date.now()
+    });
+    res.json({ success: true });
+  });
+
+  app.get('/api/presence/active', (req, res) => {
+    const now = Date.now();
+    const activeThreshold = 15000; // 15 seconds of inactivity is offline
+    
+    // Clean up expired ones
+    for (const [userId, presence] of activePresence.entries()) {
+      if (now - presence.lastActive > activeThreshold) {
+        activePresence.delete(userId);
+      }
+    }
+    
+    const activeUsers = Array.from(activePresence.values());
+    res.json(activeUsers);
+  });
+
   // CORS and OPTIONS preflight hander for Power BI/external connectivity
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');

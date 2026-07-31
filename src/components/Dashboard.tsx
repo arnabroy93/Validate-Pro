@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Database,
   User,
+  Users,
   Loader2,
   Mic,
   Video,
@@ -63,6 +64,55 @@ export function Dashboard() {
   });
 
   const lastFetchedBatch = React.useRef(sessionStorage.getItem('val_lastFetchedBatch') || '');
+
+  // Live Presence Tracking State
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [showPresenceModal, setShowPresenceModal] = useState(false);
+
+  // Heartbeat loop
+  useEffect(() => {
+    if (!user?.id || !validatedBy) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        await fetch('/api/presence/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            username: validatedBy,
+            centerCode: selectedCenter || '',
+            batchCode: selectedBatch || ''
+          })
+        });
+      } catch (err) {
+        console.error('Failed to send presence heartbeat:', err);
+      }
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 5000);
+    return () => clearInterval(interval);
+  }, [user?.id, validatedBy, selectedCenter, selectedBatch]);
+
+  // Polling active users loop
+  useEffect(() => {
+    const fetchActiveUsers = async () => {
+      try {
+        const res = await fetch('/api/presence/active');
+        if (res.ok) {
+          const list = await res.json();
+          setActiveUsers(list);
+        }
+      } catch (err) {
+        console.error('Failed to fetch active users:', err);
+      }
+    };
+
+    fetchActiveUsers();
+    const interval = setInterval(fetchActiveUsers, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Effects to persist state
   useEffect(() => {
@@ -700,6 +750,25 @@ export function Dashboard() {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => setShowPresenceModal(true)}
+            className="btn-secondary flex items-center gap-2 glass-card border-emerald-500/20 text-slate-700 hover:bg-emerald-500/5 shadow-sm hover:shadow transition-shadow duration-300 relative"
+            title="View active online validators"
+          >
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <Users size={16} className="text-slate-500" />
+              <span className="font-semibold text-xs text-slate-600 sm:inline hidden">Online Validators</span>
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {activeUsers.length}
+              </span>
+            </div>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => window.dispatchEvent(new CustomEvent('reset_validation'))}
             className="btn-secondary flex items-center gap-2 glass-card text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5 shadow-sm hover:shadow transition-shadow duration-300"
             title="Start New Validation / Clear Form"
@@ -1019,7 +1088,7 @@ export function Dashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.5) }}
                             key={studentKey} 
-                            className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover:bg-brand-light transition-colors backdrop-blur-sm")}
+                            className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover-lift backdrop-blur-sm")}
                           >
                             <td className="px-6 py-4 text-sm font-mono text-brand-primary font-semibold">{student.student_code}</td>
                             <td className="px-6 py-4">
@@ -1135,6 +1204,120 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Live Presence Modal */}
+      <AnimatePresence>
+        {showPresenceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowPresenceModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', duration: 0.3 }}
+              className="bg-white rounded-2xl border border-slate-200/80 shadow-2xl w-full max-w-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Active Online Validators
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">See live users and their current validation activities</p>
+                </div>
+                <button
+                  onClick={() => setShowPresenceModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {activeUsers.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 space-y-2">
+                    <Users size={32} className="mx-auto text-slate-300 animate-pulse" />
+                    <p className="text-sm font-medium">No validators are currently active</p>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden border border-slate-100 rounded-xl shadow-sm bg-white">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Validator Name</th>
+                          <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Center Code</th>
+                          <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Batch Code</th>
+                          <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {activeUsers.map((active) => {
+                          const isMe = active.userId === user?.id;
+                          const isWorking = active.centerCode && active.batchCode;
+                          return (
+                            <tr key={active.userId} className={`hover-lift ${isMe ? 'bg-amber-50/20' : ''}`}>
+                              <td className="px-4 py-3.5 font-semibold text-slate-700 flex items-center gap-2">
+                                {active.username}
+                                {isMe && (
+                                  <span className="bg-brand-light text-brand-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-brand-border">
+                                    You
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 font-medium text-slate-600">
+                                {active.centerCode || <span className="text-slate-400 italic">N.A.</span>}
+                              </td>
+                              <td className="px-4 py-3.5 font-medium text-slate-600">
+                                {active.batchCode || <span className="text-slate-400 italic">N.A.</span>}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                {isWorking ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold border border-emerald-100">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    Validating
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-xs font-medium border border-slate-100">
+                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>
+                                    Idle
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                <button
+                  onClick={() => setShowPresenceModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                >
+                  Close Window
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
