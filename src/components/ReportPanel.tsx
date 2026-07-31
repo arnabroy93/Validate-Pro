@@ -625,12 +625,14 @@ export function ReportPanel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-slate-950/45 backdrop-blur-md flex items-center justify-center p-4 md:p-8"
           >
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.94, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.94, y: 15, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
               className="bg-brand-bg w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/50"
             >
               <div className="p-6 border-b border-brand-border glass-card flex justify-between items-center shrink-0">

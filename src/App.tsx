@@ -30,198 +30,281 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
   
   return (
     <aside className="w-64 glass-panel flex flex-col h-screen fixed left-0 top-0 z-10 !border-y-0 !border-l-0 !rounded-none">
-      <div 
+      <motion.div 
         onClick={() => setActiveTab('dashboard')}
-        className="p-6 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="p-6 flex items-center gap-3 cursor-pointer select-none group"
       >
-        <img src="/favicon.svg" alt="Validate-Pro Logo" className="w-8 h-8 rounded-lg shadow-sm" />
-        <span className="font-bold text-xl tracking-tight text-brand-text">Validate-Pro</span>
-      </div>
+        <motion.img 
+          animate={{ rotate: [0, 8, -8, 0] }}
+          transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+          src="/favicon.svg" 
+          alt="Validate-Pro Logo" 
+          className="w-8 h-8 rounded-lg shadow-sm" 
+        />
+        <span className="font-bold text-xl tracking-tight text-brand-text bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent group-hover:from-teal-500 group-hover:to-emerald-500 transition-all duration-300">Validate-Pro</span>
+      </motion.div>
       
-      <nav className="flex-1 px-4 space-y-1">
-        
-            {features.insights && (
-        <button
-                  onClick={() => setActiveTab('insights')}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                    activeTab === 'insights' 
-                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                  )}
-                >
-                  <PieChart size={18} />
-                  <span>Insights</span>
-                </button>
-      )}
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto py-2">
+        {features.insights && (
+          <motion.button
+            onClick={() => setActiveTab('insights')}
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+              activeTab === 'insights' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+            )}
+          >
+            {activeTab === 'insights' && (
+              <motion.div
+                layoutId="sidebarActiveBg"
+                className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <PieChart size={18} />
+            <span>Insights</span>
+          </motion.button>
+        )}
         {features.validation && (
-        <button
-                  onClick={() => {
-                    if (activeTab === 'dashboard') {
-                      window.dispatchEvent(new CustomEvent('reset_validation'));
-                    } else {
-                      setActiveTab('dashboard');
-                    }
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                    activeTab === 'dashboard' 
-                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                  )}
-                >
-                  <LayoutDashboard size={18} />
-                  <span>Validation</span>
-                </button>
-      )}
+          <motion.button
+            onClick={() => {
+              if (activeTab === 'dashboard') {
+                window.dispatchEvent(new CustomEvent('reset_validation'));
+              } else {
+                setActiveTab('dashboard');
+              }
+            }}
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+              activeTab === 'dashboard' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+            )}
+          >
+            {activeTab === 'dashboard' && (
+              <motion.div
+                layoutId="sidebarActiveBg"
+                className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <LayoutDashboard size={18} />
+            <span>Validation</span>
+          </motion.button>
+        )}
 
         {features.records && (
-        <button
-                  onClick={() => setActiveTab('records')}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                    activeTab === 'records' 
-                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                  )}
-                >
-                  <FileText size={18} />
-                  <span>My Activity</span>
-                </button>
-      )}
+          <motion.button
+            onClick={() => setActiveTab('records')}
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+              activeTab === 'records' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+            )}
+          >
+            {activeTab === 'records' && (
+              <motion.div
+                layoutId="sidebarActiveBg"
+                className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <FileText size={18} />
+            <span>My Activity</span>
+          </motion.button>
+        )}
 
         {features.reports && (
-        <button
-                  onClick={() => setActiveTab('reports')}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                    activeTab === 'reports' 
-                      ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                      : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                  )}
-                >
-                  <FileText size={18} />
-                  <span>Reports</span>
-                </button>
-      )}
-
-        
+          <motion.button
+            onClick={() => setActiveTab('reports')}
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+              activeTab === 'reports' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+            )}
+          >
+            {activeTab === 'reports' && (
+              <motion.div
+                layoutId="sidebarActiveBg"
+                className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <FileText size={18} />
+            <span>Reports</span>
+          </motion.button>
+        )}
 
         {isAdmin && (
           <>
-            <button
-            onClick={() => setActiveTab('features_config')}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-              activeTab === 'features_config' 
-                ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-            )}
-          >
-            <Settings size={18} />
-            <span>Feature Controls</span>
-          </button>
-            <div className="pt-4 pb-2 px-3">
+            <motion.button
+              onClick={() => setActiveTab('features_config')}
+              whileHover={{ x: 4 }}
+              whileTap={{ scale: 0.98 }}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                activeTab === 'features_config' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+              )}
+            >
+              {activeTab === 'features_config' && (
+                <motion.div
+                  layoutId="sidebarActiveBg"
+                  className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Settings size={18} />
+              <span>Feature Controls</span>
+            </motion.button>
+            <div className="pt-4 pb-2 px-3 select-none">
               <p className="text-[10px] font-black uppercase tracking-widest text-brand-primary/50">Administration</p>
             </div>
             {features.global_insights && (
-            <button
-                          onClick={() => setActiveTab('global_insights')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'global_insights' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <PieChart size={18} className="text-brand-primary" />
-                          <span>Global Insights</span>
-                        </button>
-          )}
-
-            
+              <motion.button
+                onClick={() => setActiveTab('global_insights')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'global_insights' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'global_insights' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <PieChart size={18} className="text-brand-primary" />
+                <span>Global Insights</span>
+              </motion.button>
+            )}
 
             {features.users && (
-            <button
-                          onClick={() => setActiveTab('users')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'users' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <Users size={18} />
-                          <span>User Management</span>
-                        </button>
-          )}
+              <motion.button
+                onClick={() => setActiveTab('users')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'users' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'users' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <Users size={18} />
+                <span>User Management</span>
+              </motion.button>
+            )}
 
             {features.user_activity && (
-            <button
-                          onClick={() => setActiveTab('user_activity')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'user_activity' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <FileText size={18} />
-                          <span>User Activity</span>
-                        </button>
-          )}
+              <motion.button
+                onClick={() => setActiveTab('user_activity')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'user_activity' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'user_activity' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <FileText size={18} />
+                <span>User Activity</span>
+              </motion.button>
+            )}
 
             {features.health && (
-            <button
-                          onClick={() => setActiveTab('health')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'health' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <RefreshCcw size={18} />
-                          <span>System Health</span>
-                        </button>
-          )}
+              <motion.button
+                onClick={() => setActiveTab('health')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'health' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'health' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <RefreshCcw size={18} />
+                <span>System Health</span>
+              </motion.button>
+            )}
 
             {features.powerbi && (
-            <button
-                          onClick={() => setActiveTab('powerbi')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'powerbi' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <BarChart3 size={18} className="text-brand-primary" />
-                          <span>Power BI Connect</span>
-                        </button>
-          )}
+              <motion.button
+                onClick={() => setActiveTab('powerbi')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'powerbi' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'powerbi' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <BarChart3 size={18} className="text-brand-primary" />
+                <span>Power BI Connect</span>
+              </motion.button>
+            )}
 
             {features.upload_logs && (
-            <button
-                          onClick={() => setActiveTab('upload_logs')}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm",
-                            activeTab === 'upload_logs' 
-                              ? "bg-white/70 text-brand-primary shadow-sm border border-white/60" 
-                              : "text-slate-500 hover:bg-white/40 hover:text-brand-hover"
-                          )}
-                        >
-                          <Upload size={18} />
-                          <span>Excel Upload Logs</span>
-                        </button>
-          )}
+              <motion.button
+                onClick={() => setActiveTab('upload_logs')}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm relative z-10 transition-colors",
+                  activeTab === 'upload_logs' ? "text-brand-primary" : "text-slate-500 hover:text-brand-hover"
+                )}
+              >
+                {activeTab === 'upload_logs' && (
+                  <motion.div
+                    layoutId="sidebarActiveBg"
+                    className="absolute inset-0 bg-white/75 shadow-sm border border-white/60 rounded-xl -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <Upload size={18} />
+                <span>Excel Upload Logs</span>
+              </motion.button>
+            )}
           </>
         )}
       </nav>
 
       <div className="p-4 border-t border-brand-border/30">
-        <div className="flex items-center gap-3 p-3 bg-white/40 rounded-2xl mb-4 border border-white/50 backdrop-blur-md shadow-sm">
-          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-brand-primary/20 shadow-sm bg-brand-light">
+        <motion.div 
+          whileHover={{ y: -2 }}
+          className="flex items-center gap-3 p-3 bg-white/40 rounded-2xl mb-4 border border-white/50 backdrop-blur-md shadow-sm cursor-pointer group/profile"
+        >
+          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-brand-primary/20 shadow-sm bg-brand-light transition-transform duration-300 group-hover/profile:scale-105">
             <img 
               src={getAvatarUrl(profile?.username || 'user', profile?.role)} 
               alt={profile?.username || 'User Avatar'}
@@ -229,18 +312,20 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-brand-text truncate leading-tight mb-0.5">{profile?.username}</p>
+            <p className="text-sm font-bold text-brand-text truncate leading-tight mb-0.5 group-hover/profile:text-brand-primary transition-colors duration-300">{profile?.username}</p>
             <p className="text-[10px] text-brand-text/50 font-black uppercase tracking-widest">{profile?.role}</p>
           </div>
-        </div>
+        </motion.div>
         
-        <button
+        <motion.button
           onClick={signOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all font-bold text-sm"
+          whileHover={{ x: 4, backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#f43f5e" }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 transition-all font-bold text-sm"
         >
           <LogOut size={18} />
           <span>Logout</span>
-        </button>
+        </motion.button>
       </div>
     </aside>
   );
@@ -273,10 +358,10 @@ function MainContent() {
           {activeTab === 'dashboard' ? (
             <motion.div
               key="dashboard"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="flex-1 flex flex-col"
             >
               <Dashboard />
@@ -284,10 +369,10 @@ function MainContent() {
           ) : activeTab === 'reports' ? (
             <motion.div
               key="reports"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="p-8"
             >
               <ReportPanel />
@@ -295,10 +380,10 @@ function MainContent() {
           ) : activeTab === 'insights' ? (
             <motion.div
               key="insights"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="p-8 flex-1"
             >
               <Insights isAdminView={false} />
@@ -306,10 +391,10 @@ function MainContent() {
           ) : activeTab === 'global_insights' ? (
             <motion.div
               key="global_insights"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="p-8 flex-1"
             >
               <Insights isAdminView={true} />
@@ -317,10 +402,10 @@ function MainContent() {
           ) : activeTab === 'features_config' ? (
             <motion.div
               key="features_config"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="p-8 flex-1"
             >
               <FeatureControls />
@@ -328,10 +413,10 @@ function MainContent() {
           ) : (
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
               className="p-8"
             >
               <AdminPanel forcedTab={activeTab as any} />

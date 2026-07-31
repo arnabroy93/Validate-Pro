@@ -413,11 +413,9 @@ export function Dashboard() {
     "Milan Biswas",
     "Navamita Talukdar",
     "Rashmi Mukherjee",
-    "Sirivennela Gaddam",
+    "Sapna Yadav",
     "Susmita Chakraborty",
-    "Susmita Ghosh Dastidar",
-    "Tanmoy Bose",
-    "Ulfath Naaz"
+    "Tanmoy Bose"
   ];
 
   const centerCodes = useMemo(() => {
@@ -689,28 +687,36 @@ export function Dashboard() {
         <h2 className="text-lg font-semibold text-brand-text">Batch Validation Dashboard</h2>
         <div className="flex items-center gap-4">
           {profile?.role === 'admin' && (
-            <label className="flex items-center gap-2 btn-secondary cursor-pointer">
+            <motion.label 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 btn-secondary cursor-pointer shadow-sm hover:shadow transition-shadow duration-300"
+            >
               <Upload className="w-4 h-4" />
               <span>{fileName || 'Upload Excel'}</span>
               <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
-            </label>
+            </motion.label>
           )}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => window.dispatchEvent(new CustomEvent('reset_validation'))}
-            className="btn-secondary flex items-center gap-2 glass-card text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5"
+            className="btn-secondary flex items-center gap-2 glass-card text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5 shadow-sm hover:shadow transition-shadow duration-300"
             title="Start New Validation / Clear Form"
           >
             <RefreshCcw size={16} />
             <span className="hidden sm:inline">Start New</span>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             disabled={loading || !selectedBatch || !validationType}
             onClick={handleSubmit}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            className="btn-primary flex items-center gap-2 disabled:opacity-50 shadow-md hover:shadow-lg transition-all duration-300"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
             Save Changes
-          </button>
+          </motion.button>
         </div>
       </header>
 
@@ -719,9 +725,11 @@ export function Dashboard() {
           {data.length > 0 && (
             <motion.div 
               key="filters-config"
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 glass-card p-6"
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
+              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 glass-card p-6 shadow-sm hover:shadow-md transition-shadow duration-300"
             >
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Validated By</label>
@@ -813,7 +821,11 @@ export function Dashboard() {
               className="space-y-6"
             >
               {/* Student Details Header Banner (Gradient) */}
-              <div className="bg-gradient-to-r from-brand-primary to-emerald-400 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-brand-primary/20 backdrop-blur-md">
+              <motion.div 
+                whileHover={{ y: -3, boxShadow: "0 12px 24px -4px rgba(13, 148, 136, 0.25)" }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="bg-gradient-to-r from-brand-primary to-emerald-400 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-brand-primary/20 backdrop-blur-md cursor-default select-none"
+              >
                 <div>
                   <p className="text-xs uppercase opacity-80 font-bold tracking-[0.1em]">Batch Statistics</p>
                   <h3 className="text-2xl font-black mt-1 tracking-tight">{selectedBatch}</h3>
@@ -840,7 +852,7 @@ export function Dashboard() {
                     <p className="font-bold text-xl text-nowrap">Running</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Data Table */}
               <div className="glass-card shadow-lg flex flex-col border border-brand-border">
@@ -1032,26 +1044,32 @@ export function Dashboard() {
                             </td>
                             {['Validated', 'ReValidated', 'Absent', 'Rejected'].map((status) => (
                               <td key={status} className="px-4 py-4 text-center">
-                                <input 
+                                <motion.input 
+                                  whileHover={{ scale: 1.25 }}
+                                  whileTap={{ scale: 0.8 }}
                                   type="checkbox" 
-                                  className="accent-brand-primary w-4 h-4 cursor-pointer rounded"
+                                  className="accent-brand-primary w-4 h-4 cursor-pointer rounded transition-transform"
                                   checked={v.status === status}
                                   onChange={() => handleCheckboxChange(student.student_code, 'status', v.status === status ? null : status as any)}
                                 />
                               </td>
                             ))}
                             <td className="px-4 py-4 text-center">
-                              <input 
+                              <motion.input 
+                                whileHover={{ scale: 1.25 }}
+                                whileTap={{ scale: 0.8 }}
                                 type="checkbox" 
-                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded"
+                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded transition-transform"
                                 checked={v.mic_on || false}
                                 onChange={(e) => handleCheckboxChange(student.student_code, 'mic_on', e.target.checked)}
                               />
                             </td>
                             <td className="px-4 py-4 text-center">
-                              <input 
+                              <motion.input 
+                                whileHover={{ scale: 1.25 }}
+                                whileTap={{ scale: 0.8 }}
                                 type="checkbox" 
-                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded"
+                                className="accent-indigo-500 w-4 h-4 cursor-pointer rounded transition-transform"
                                 checked={v.video_on || false}
                                 onChange={(e) => handleCheckboxChange(student.student_code, 'video_on', e.target.checked)}
                               />

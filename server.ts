@@ -933,25 +933,89 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         return res.status(500).json({ error: 'Supabase client not initialized' });
       }
       
-      const limit = 1000;
       let allData: any[] = [];
-      let from = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data, error } = await supabaseAdmin
-          .from('batch_students')
-          .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
-          .order('id', { ascending: false })
-          .range(from, from + limit - 1);
 
-        if (error) throw error;
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          from += limit;
-          if (data.length < limit) hasMore = false;
-        } else {
-          hasMore = false;
+      // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
+      if (globalSql) {
+        try {
+          const rows = await globalSql`
+            SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at
+            FROM public.batch_students;
+          `;
+          allData = rows.map(r => ({
+            id: r.id,
+            ae_name: r.ae_name || null,
+            center_code: r.center_code || null,
+            batch_code: r.batch_code || null,
+            student_code: r.student_code || null,
+            student_name: r.student_name || null,
+            mobile_no: r.mobile_no || null,
+            dob: r.dob || null,
+            father_name: r.father_name || null,
+            address: r.address || null,
+            batch_status: r.batch_status || null,
+            batch_start_date: r.batch_start_date || null,
+            program_name: r.program_name || null,
+            education_qualification: r.education_qualification || null,
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null)
+          }));
+          
+          allData.sort((a, b) => {
+            const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            if (timeDiff !== 0) return timeDiff;
+            return String(b.id || "").localeCompare(String(a.id || ""));
+          });
+          
+          return res.json(allData);
+        } catch (dbErr: any) {
+          console.error('[API Batch Data] globalSql direct query failed, falling back to Supabase API:', dbErr);
+        }
+      }
+
+      // 2. Fallback: Fetch in parallel using Supabase SDK
+      const limit = 1000;
+      const { count, error: countErr } = await supabaseAdmin
+        .from('batch_students')
+        .select('id', { count: 'exact', head: true });
+
+      if (!countErr && count !== null) {
+        const promises = [];
+        for (let from = 0; from < count; from += limit) {
+          promises.push(
+            supabaseAdmin
+              .from('batch_students')
+              .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+              .order('id', { ascending: false })
+              .range(from, from + limit - 1)
+          );
+        }
+        
+        const results = await Promise.all(promises);
+        for (const res of results) {
+          if (res.error) throw res.error;
+          if (res.data) {
+            allData.push(...res.data);
+          }
+        }
+      } else {
+        // Fallback to sequential if count fails
+        let from = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data, error } = await supabaseAdmin
+            .from('batch_students')
+            .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+            .order('id', { ascending: false })
+            .range(from, from + limit - 1);
+
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            from += limit;
+            if (data.length < limit) hasMore = false;
+          } else {
+            hasMore = false;
+          }
         }
       }
       
@@ -1037,25 +1101,94 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
       
-      const limit = 1000;
       let allData: any[] = [];
-      let from = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data, error } = await supabaseAdmin
-          .from('student_validations')
-          .select('*')
-          .order('id', { ascending: false })
-          .range(from, from + limit - 1);
 
-        if (error) throw error;
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          from += limit;
-          if (data.length < limit) hasMore = false;
-        } else {
-          hasMore = false;
+      // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
+      if (globalSql) {
+        try {
+          const rows = await globalSql`
+            SELECT id, user_id, status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type
+            FROM public.student_validations;
+          `;
+          allData = rows.map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            status: r.status,
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null),
+            updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : (r.updated_at || null),
+            student_code: r.student_code || null,
+            student_name: r.student_name || null,
+            ae_name: r.ae_name || null,
+            aligned_ae: r.aligned_ae || null,
+            center_code: r.center_code || null,
+            batch_code: r.batch_code || null,
+            validated_by: r.validated_by || null,
+            remarks: r.remarks || null,
+            recording_link: r.recording_link || null,
+            dob: r.dob || null,
+            father_name: r.father_name || null,
+            address: r.address || null,
+            mic_on: r.mic_on || false,
+            video_on: r.video_on || false,
+            validation_type: r.validation_type || 'N.A.'
+          }));
+          
+          allData.sort((a, b) => {
+            const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            if (timeDiff !== 0) return timeDiff;
+            return String(b.id || "").localeCompare(String(a.id || ""));
+          });
+          
+          return res.json(allData);
+        } catch (dbErr: any) {
+          console.error('[API All Validations] globalSql direct query failed, falling back to Supabase API:', dbErr);
+        }
+      }
+
+      // 2. Fallback: Fetch in parallel using Supabase SDK
+      const limit = 1000;
+      const { count, error: countErr } = await supabaseAdmin
+        .from('student_validations')
+        .select('id', { count: 'exact', head: true });
+
+      if (!countErr && count !== null) {
+        const promises = [];
+        for (let from = 0; from < count; from += limit) {
+          promises.push(
+            supabaseAdmin
+              .from('student_validations')
+              .select('*')
+              .order('id', { ascending: false })
+              .range(from, from + limit - 1)
+          );
+        }
+        
+        const results = await Promise.all(promises);
+        for (const res of results) {
+          if (res.error) throw res.error;
+          if (res.data) {
+            allData.push(...res.data);
+          }
+        }
+      } else {
+        // Fallback to sequential if count fails
+        let from = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data, error } = await supabaseAdmin
+            .from('student_validations')
+            .select('*')
+            .order('id', { ascending: false })
+            .range(from, from + limit - 1);
+
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            from += limit;
+            if (data.length < limit) hasMore = false;
+          } else {
+            hasMore = false;
+          }
         }
       }
 

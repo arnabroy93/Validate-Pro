@@ -37,18 +37,46 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
       }
       
       let allValidations = [];
-      let vFrom = 0;
-      let vLimit = 1000;
-      let vHasMore = true;
-      while (vHasMore) {
-        const { data, error } = await vQuery.range(vFrom, vFrom + vLimit - 1);
-        if (error) throw error;
-        if (data && data.length > 0) {
-          allValidations = [...allValidations, ...data];
-          vFrom += vLimit;
-          if (data.length < vLimit) vHasMore = false;
-        } else {
-          vHasMore = false;
+      
+      if (isAdminView) {
+        try {
+          const vRes = await fetch('/api/admin/all_validations');
+          if (vRes.ok) {
+            allValidations = await vRes.json();
+          } else {
+            throw new Error('API failed');
+          }
+        } catch (vErr) {
+          console.warn('[Insights] All validations API fetch failed, falling back to Supabase SDK:', vErr);
+          let vFrom = 0;
+          let vLimit = 1000;
+          let vHasMore = true;
+          while (vHasMore) {
+            const { data, error } = await vQuery.range(vFrom, vFrom + vLimit - 1);
+            if (error) throw error;
+            if (data && data.length > 0) {
+              allValidations = [...allValidations, ...data];
+              vFrom += vLimit;
+              if (data.length < vLimit) vHasMore = false;
+            } else {
+              vHasMore = false;
+            }
+          }
+        }
+      } else {
+        let vFrom = 0;
+        let vLimit = 1000;
+        let vHasMore = true;
+        while (vHasMore) {
+          const { data, error } = await vQuery.range(vFrom, vFrom + vLimit - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allValidations = [...allValidations, ...data];
+            vFrom += vLimit;
+            if (data.length < vLimit) vHasMore = false;
+          } else {
+            vHasMore = false;
+          }
         }
       }
 
@@ -57,45 +85,55 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
       
       let allStudents = [];
       
-      if (relevantBatches.length > 0) {
-        // Fetch only students in relevant batches, or all if admin
-        let sQuery = supabase.from('batch_students').select('batch_code, center_code, student_code');
-        
-        let sFrom = 0;
-        let sLimit = 1000;
-        let sHasMore = true;
-        while (sHasMore) {
-          // If not admin and batches are fewer than 100, we can use .in to optimize, otherwise just fetch all and filter locally
-          let currentQuery = sQuery.range(sFrom, sFrom + sLimit - 1);
-          if (!isAdminView && relevantBatches.length <= 100) {
-              currentQuery = currentQuery.in('batch_code', relevantBatches);
-          }
-          
-          const { data, error } = await currentQuery;
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allStudents = [...allStudents, ...data];
-            sFrom += sLimit;
-            if (data.length < sLimit) sHasMore = false;
-          } else {
-            sHasMore = false;
-          }
+      try {
+        const sRes = await fetch('/api/batch_data');
+        if (sRes.ok) {
+          allStudents = await sRes.json();
+        } else {
+          throw new Error('API failed');
         }
-      } else if (isAdminView) {
-        // If admin but no validations exist yet, still fetch all students
-        let sQuery = supabase.from('batch_students').select('batch_code, center_code, student_code');
-        let sFrom = 0;
-        let sLimit = 1000;
-        let sHasMore = true;
-        while (sHasMore) {
-          const { data, error } = await sQuery.range(sFrom, sFrom + sLimit - 1);
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allStudents = [...allStudents, ...data];
-            sFrom += sLimit;
-            if (data.length < sLimit) sHasMore = false;
-          } else {
-            sHasMore = false;
+      } catch (sErr) {
+        console.warn('[Insights] Batch data API fetch failed, falling back to Supabase SDK:', sErr);
+        if (relevantBatches.length > 0) {
+          // Fetch only students in relevant batches, or all if admin
+          let sQuery = supabase.from('batch_students').select('batch_code, center_code, student_code');
+          
+          let sFrom = 0;
+          let sLimit = 1000;
+          let sHasMore = true;
+          while (sHasMore) {
+            // If not admin and batches are fewer than 100, we can use .in to optimize, otherwise just fetch all and filter locally
+            let currentQuery = sQuery.range(sFrom, sFrom + sLimit - 1);
+            if (!isAdminView && relevantBatches.length <= 100) {
+                currentQuery = currentQuery.in('batch_code', relevantBatches);
+            }
+            
+            const { data, error } = await currentQuery;
+            if (error) throw error;
+            if (data && data.length > 0) {
+              allStudents = [...allStudents, ...data];
+              sFrom += sLimit;
+              if (data.length < sLimit) sHasMore = false;
+            } else {
+              sHasMore = false;
+            }
+          }
+        } else if (isAdminView) {
+          // If admin but no validations exist yet, still fetch all students
+          let sQuery = supabase.from('batch_students').select('batch_code, center_code, student_code');
+          let sFrom = 0;
+          let sLimit = 1000;
+          let sHasMore = true;
+          while (sHasMore) {
+            const { data, error } = await sQuery.range(sFrom, sFrom + sLimit - 1);
+            if (error) throw error;
+            if (data && data.length > 0) {
+              allStudents = [...allStudents, ...data];
+              sFrom += sLimit;
+              if (data.length < sLimit) sHasMore = false;
+            } else {
+              sHasMore = false;
+            }
           }
         }
       }
@@ -254,7 +292,13 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          whileHover={{ y: -4, boxShadow: "0 10px 20px -3px rgba(59, 130, 246, 0.15)", borderColor: "rgba(59, 130, 246, 0.3)" }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }} 
+          className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm cursor-default select-none"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg"><Database size={18} /></div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Batches</p>
@@ -262,7 +306,13 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
           <p className="text-3xl font-black text-slate-800">{metrics.totalBatches}</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          whileHover={{ y: -4, boxShadow: "0 10px 20px -3px rgba(16, 185, 129, 0.15)", borderColor: "rgba(16, 185, 129, 0.3)" }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }} 
+          className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm cursor-default select-none"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg"><Activity size={18} /></div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fully Validated</p>
@@ -270,7 +320,13 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
           <p className="text-3xl font-black text-slate-800">{metrics.fullyValidatedBatches}</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          whileHover={{ y: -4, boxShadow: "0 10px 20px -3px rgba(245, 158, 11, 0.15)", borderColor: "rgba(245, 158, 11, 0.3)" }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }} 
+          className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm cursor-default select-none"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg"><Activity size={18} /></div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Partially Validated</p>
@@ -278,7 +334,13 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
           <p className="text-3xl font-black text-slate-800">{metrics.partiallyValidatedBatches}</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          whileHover={{ y: -4, boxShadow: "0 10px 20px -3px rgba(99, 102, 241, 0.15)", borderColor: "rgba(99, 102, 241, 0.3)" }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }} 
+          className="glass-card rounded-2xl p-5 border border-slate-200 shadow-sm cursor-default select-none"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg"><Users size={18} /></div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Students Validated</p>
