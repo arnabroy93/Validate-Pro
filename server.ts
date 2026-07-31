@@ -245,6 +245,51 @@ export const app = express();
       })
     : null;
 
+  // Shared Simple Cache to prevent API rate limiting (429) on rapid client requests
+  let cachedBatchStudents: any[] | null = null;
+  let cachedBatchStudentsTime = 0;
+  let activeBatchStudentsPromise: Promise<any[]> | null = null;
+
+  let cachedAllValidations: any[] | null = null;
+  let cachedAllValidationsTime = 0;
+  let activeAllValidationsPromise: Promise<any[]> | null = null;
+
+  const CACHE_TTL = 120000; // 2 minutes cache to shield Supabase from rapid/parallel fetching
+
+  function invalidateCache() {
+    cachedBatchStudents = null;
+    cachedBatchStudentsTime = 0;
+    activeBatchStudentsPromise = null;
+    cachedAllValidations = null;
+    cachedAllValidationsTime = 0;
+    activeAllValidationsPromise = null;
+  }
+
+  // Robust fetch retry helper for Supabase Queries (Exponential Backoff for Rate Limits 429)
+  async function fetchWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
+    try {
+      const res = await fn();
+      const anyRes = res as any;
+      if (anyRes && anyRes.error) {
+        const errStr = String(anyRes.error.message || anyRes.error).toLowerCase();
+        if (retries > 0 && (errStr.includes('429') || errStr.includes('rate') || errStr.includes('exceeded') || errStr.includes('too many requests'))) {
+          console.warn(`[Supabase Retry] Rate limit hit. Retrying in ${delay}ms... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchWithRetry(fn, retries - 1, delay * 2);
+        }
+      }
+      return res;
+    } catch (err: any) {
+      const errStr = String(err.message || err).toLowerCase();
+      if (retries > 0 && (errStr.includes('429') || errStr.includes('rate') || errStr.includes('exceeded') || errStr.includes('too many requests'))) {
+        console.warn(`[Supabase Retry Exception] Retrying in ${delay}ms... (${retries} retries left)`, errStr);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchWithRetry(fn, retries - 1, delay * 2);
+      }
+      throw err;
+    }
+  }
+
   app.use(express.json());
 
   // Live presence state
@@ -386,6 +431,7 @@ export const app = express();
   app.post('/api/admin/sync-db', async (req, res) => {
     try {
       await runMigrations(true);
+      invalidateCache();
       res.json({ message: 'Database sync and schema reload completed' });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -972,102 +1018,115 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase client not initialized' });
       }
-      
-      let allData: any[] = [];
 
-      // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
-      if (globalSql) {
-        try {
-          const rows = await globalSql`
-            SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at
-            FROM public.batch_students;
-          `;
-          allData = rows.map(r => ({
-            id: r.id,
-            ae_name: r.ae_name || null,
-            center_code: r.center_code || null,
-            batch_code: r.batch_code || null,
-            student_code: r.student_code || null,
-            student_name: r.student_name || null,
-            mobile_no: r.mobile_no || null,
-            dob: r.dob || null,
-            father_name: r.father_name || null,
-            address: r.address || null,
-            batch_status: r.batch_status || null,
-            batch_start_date: r.batch_start_date || null,
-            program_name: r.program_name || null,
-            education_qualification: r.education_qualification || null,
-            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null)
-          }));
-          
-          allData.sort((a, b) => {
-            const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return String(b.id || "").localeCompare(String(a.id || ""));
-          });
-          
-          return res.json(allData);
-        } catch (dbErr: any) {
-          console.error('[API Batch Data] globalSql direct query failed, falling back to Supabase API:', dbErr);
-        }
+      const forceRefresh = req.query.refresh === 'true';
+      if (forceRefresh) {
+        invalidateCache();
       }
 
-      // 2. Fallback: Fetch in parallel using Supabase SDK
-      const limit = 1000;
-      const { count, error: countErr } = await supabaseAdmin
-        .from('batch_students')
-        .select('id', { count: 'exact', head: true });
+      // Check Cache
+      const now = Date.now();
+      if (!forceRefresh && cachedBatchStudents && (now - cachedBatchStudentsTime < CACHE_TTL)) {
+        return res.json(cachedBatchStudents);
+      }
 
-      if (!countErr && count !== null) {
-        const promises = [];
-        for (let from = 0; from < count; from += limit) {
-          promises.push(
-            supabaseAdmin
-              .from('batch_students')
-              .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
-              .order('id', { ascending: false })
-              .range(from, from + limit - 1)
-          );
-        }
-        
-        const results = await Promise.all(promises);
-        for (const res of results) {
-          if (res.error) throw res.error;
-          if (res.data) {
-            allData.push(...res.data);
+      // If there is already an active fetch promise, wait for it!
+      if (!forceRefresh && activeBatchStudentsPromise) {
+        const data = await activeBatchStudentsPromise;
+        return res.json(data);
+      }
+
+      // Start a new coalesced fetch promise
+      activeBatchStudentsPromise = (async () => {
+        let allData: any[] = [];
+
+        // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
+        if (globalSql) {
+          try {
+            const rows = await globalSql`
+              SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at
+              FROM public.batch_students;
+            `;
+            allData = rows.map(r => ({
+              id: r.id,
+              ae_name: r.ae_name || null,
+              center_code: r.center_code || null,
+              batch_code: r.batch_code || null,
+              student_code: r.student_code || null,
+              student_name: r.student_name || null,
+              mobile_no: r.mobile_no || null,
+              dob: r.dob || null,
+              father_name: r.father_name || null,
+              address: r.address || null,
+              batch_status: r.batch_status || null,
+              batch_start_date: r.batch_start_date || null,
+              program_name: r.program_name || null,
+              education_qualification: r.education_qualification || null,
+              created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null)
+            }));
+            
+            allData.sort((a, b) => {
+              const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+              if (timeDiff !== 0) return timeDiff;
+              return String(b.id || "").localeCompare(String(a.id || ""));
+            });
+            
+            // Populate Cache
+            cachedBatchStudents = allData;
+            cachedBatchStudentsTime = Date.now();
+            
+            return allData;
+          } catch (dbErr: any) {
+            console.error('[API Batch Data] globalSql direct query failed, falling back to Supabase API:', dbErr);
           }
         }
-      } else {
-        // Fallback to sequential if count fails
+
+        // 2. Fallback: Fetch sequentially using Supabase SDK with retry (guarantees minimal rate-limit risk)
+        const limit = 1000;
         let from = 0;
         let hasMore = true;
         while (hasMore) {
-          const { data, error } = await supabaseAdmin
-            .from('batch_students')
-            .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
-            .order('id', { ascending: false })
-            .range(from, from + limit - 1);
+          const currentFrom = from;
+          const result: any = await fetchWithRetry(async () =>
+            await supabaseAdmin
+              .from('batch_students')
+              .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+              .order('id', { ascending: false })
+              .range(currentFrom, currentFrom + limit - 1)
+          );
 
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allData = [...allData, ...data];
+          if (result.error) throw result.error;
+          if (result.data && result.data.length > 0) {
+            allData = [...allData, ...result.data];
             from += limit;
-            if (data.length < limit) hasMore = false;
+            if (result.data.length < limit) hasMore = false;
           } else {
             hasMore = false;
           }
         }
-      }
+        
+        // Ensure absolute sorting
+        allData.sort((a, b) => {
+          const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return String(b.id || "").localeCompare(String(a.id || "")); // id is UUID
+        });
+        
+        // Populate Cache
+        cachedBatchStudents = allData;
+        cachedBatchStudentsTime = Date.now();
+
+        return allData;
+      })();
+
+      // Wait for the coalesced fetch promise
+      const data = await activeBatchStudentsPromise;
+      // Reset after success
+      activeBatchStudentsPromise = null;
       
-      // Ensure absolute sorting
-      allData.sort((a, b) => {
-        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return String(b.id || "").localeCompare(String(a.id || "")); // id is UUID
-      });
-      
-      res.json(allData);
+      return res.json(data);
     } catch (error: any) {
+      activeBatchStudentsPromise = null;
       console.error('Error in /api/batch_data:', error.message);
       res.status(500).json({ error: error.message || 'Failed to fetch batch data' });
     }
@@ -1108,6 +1167,11 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
       }
       
       if (result.error) throw result.error;
+      
+      // Invalidate validations cache
+      cachedAllValidations = null;
+      cachedAllValidationsTime = 0;
+
       res.json(result.data);
     } catch (error: any) {
       console.error('Error in /api/validations/save:', error.message);
@@ -1130,6 +1194,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         if (error) throw error;
       }
       
+      // Invalidate validations cache
+      cachedAllValidations = null;
+      cachedAllValidationsTime = 0;
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error in /api/validations/submit:', error.message);
@@ -1140,105 +1208,119 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
   app.get('/api/admin/all_validations', async (req, res) => {
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
-      
-      let allData: any[] = [];
 
-      // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
-      if (globalSql) {
-        try {
-          const rows = await globalSql`
-            SELECT id, user_id, status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type
-            FROM public.student_validations;
-          `;
-          allData = rows.map(r => ({
-            id: r.id,
-            user_id: r.user_id,
-            status: r.status,
-            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null),
-            updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : (r.updated_at || null),
-            student_code: r.student_code || null,
-            student_name: r.student_name || null,
-            ae_name: r.ae_name || null,
-            aligned_ae: r.aligned_ae || null,
-            center_code: r.center_code || null,
-            batch_code: r.batch_code || null,
-            validated_by: r.validated_by || null,
-            remarks: r.remarks || null,
-            recording_link: r.recording_link || null,
-            dob: r.dob || null,
-            father_name: r.father_name || null,
-            address: r.address || null,
-            mic_on: r.mic_on || false,
-            video_on: r.video_on || false,
-            validation_type: r.validation_type || 'N.A.'
-          }));
-          
-          allData.sort((a, b) => {
-            const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return String(b.id || "").localeCompare(String(a.id || ""));
-          });
-          
-          return res.json(allData);
-        } catch (dbErr: any) {
-          console.error('[API All Validations] globalSql direct query failed, falling back to Supabase API:', dbErr);
-        }
+      const forceRefresh = req.query.refresh === 'true';
+      if (forceRefresh) {
+        invalidateCache();
       }
 
-      // 2. Fallback: Fetch in parallel using Supabase SDK
-      const limit = 1000;
-      const { count, error: countErr } = await supabaseAdmin
-        .from('student_validations')
-        .select('id', { count: 'exact', head: true });
+      // Check Cache
+      const now = Date.now();
+      if (!forceRefresh && cachedAllValidations && (now - cachedAllValidationsTime < CACHE_TTL)) {
+        return res.json(cachedAllValidations);
+      }
 
-      if (!countErr && count !== null) {
-        const promises = [];
-        for (let from = 0; from < count; from += limit) {
-          promises.push(
-            supabaseAdmin
-              .from('student_validations')
-              .select('*')
-              .order('id', { ascending: false })
-              .range(from, from + limit - 1)
-          );
-        }
-        
-        const results = await Promise.all(promises);
-        for (const res of results) {
-          if (res.error) throw res.error;
-          if (res.data) {
-            allData.push(...res.data);
+      // If there is already an active fetch promise, wait for it!
+      if (!forceRefresh && activeAllValidationsPromise) {
+        const data = await activeAllValidationsPromise;
+        return res.json(data);
+      }
+
+      // Start a new coalesced fetch promise
+      activeAllValidationsPromise = (async () => {
+        let allData: any[] = [];
+
+        // 1. Try to fetch directly from Postgres for maximum speed and zero pagination latency
+        if (globalSql) {
+          try {
+            const rows = await globalSql`
+              SELECT id, user_id, status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type
+              FROM public.student_validations;
+            `;
+            allData = rows.map(r => ({
+              id: r.id,
+              user_id: r.user_id,
+              status: r.status,
+              created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null),
+              updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : (r.updated_at || null),
+              student_code: r.student_code || null,
+              student_name: r.student_name || null,
+              ae_name: r.ae_name || null,
+              aligned_ae: r.aligned_ae || null,
+              center_code: r.center_code || null,
+              batch_code: r.batch_code || null,
+              validated_by: r.validated_by || null,
+              remarks: r.remarks || null,
+              recording_link: r.recording_link || null,
+              dob: r.dob || null,
+              father_name: r.father_name || null,
+              address: r.address || null,
+              mic_on: r.mic_on || false,
+              video_on: r.video_on || false,
+              validation_type: r.validation_type || 'N.A.'
+            }));
+            
+            allData.sort((a, b) => {
+              const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+              if (timeDiff !== 0) return timeDiff;
+              return String(b.id || "").localeCompare(String(a.id || ""));
+            });
+            
+            // Populate Cache
+            cachedAllValidations = allData;
+            cachedAllValidationsTime = Date.now();
+
+            return allData;
+          } catch (dbErr: any) {
+            console.error('[API All Validations] globalSql direct query failed, falling back to Supabase API:', dbErr);
           }
         }
-      } else {
-        // Fallback to sequential if count fails
+
+        // 2. Fallback: Fetch sequentially using Supabase SDK with retry (guarantees minimal rate-limit risk)
+        const limit = 1000;
         let from = 0;
         let hasMore = true;
         while (hasMore) {
-          const { data, error } = await supabaseAdmin
-            .from('student_validations')
-            .select('*')
-            .order('id', { ascending: false })
-            .range(from, from + limit - 1);
+          const currentFrom = from;
+          const result: any = await fetchWithRetry(async () =>
+            await supabaseAdmin
+              .from('student_validations')
+              .select('*')
+              .order('id', { ascending: false })
+              .range(currentFrom, currentFrom + limit - 1)
+          );
 
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allData = [...allData, ...data];
+          if (result.error) throw result.error;
+          if (result.data && result.data.length > 0) {
+            allData = [...allData, ...result.data];
             from += limit;
-            if (data.length < limit) hasMore = false;
+            if (result.data.length < limit) hasMore = false;
           } else {
             hasMore = false;
           }
         }
-      }
 
-      allData.sort((a, b) => {
-        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return String(b.id || "").localeCompare(String(a.id || ""));
-      });
-      res.json(allData);
+        allData.sort((a, b) => {
+          const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return String(b.id || "").localeCompare(String(a.id || ""));
+        });
+
+        // Populate Cache
+        cachedAllValidations = allData;
+        cachedAllValidationsTime = Date.now();
+
+        return allData;
+      })();
+
+      // Wait for the coalesced fetch promise
+      const data = await activeAllValidationsPromise;
+      // Reset after success
+      activeAllValidationsPromise = null;
+
+      return res.json(data);
     } catch (error: any) {
+      activeAllValidationsPromise = null;
       res.status(500).json({ error: error.message });
     }
   });

@@ -250,11 +250,11 @@ export function Dashboard() {
     fetchExistingValidations();
   }, [selectedBatch, selectedCenter, data]);
 
-  const fetchBatchStudents = async () => {
+  const fetchBatchStudents = async (forceRefresh = false) => {
     if (!user) return;
     setFetchingData(true);
     try {
-      const res = await fetch('/api/batch_data');
+      const res = await fetch(`/api/batch_data${forceRefresh ? '?refresh=true' : ''}`);
       if (!res.ok) {
         let errorMsg = 'Failed to fetch batch data from API';
         try {
@@ -439,7 +439,7 @@ export function Dashboard() {
              }
 
              toast.success(`Successfully added ${insertCount} records and updated dates for ${updateCount} records!`);
-             fetchBatchStudents(); // Refresh data
+             fetchBatchStudents(true); // Refresh data and invalidate server cache
           }
         } else {
           toast.error("No valid records found in Excel");
