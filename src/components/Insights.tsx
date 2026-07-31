@@ -449,7 +449,7 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
         >
           <div className="flex items-center gap-3 mb-2.5">
             <div className="p-2.5 bg-blue-500/10 text-blue-600 rounded-xl"><Database size={18} /></div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Batches</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Visited Batches</p>
           </div>
           <p className="text-3.5xl font-black text-slate-800 tracking-tight">
             <AnimatedCounter value={metrics.totalBatches} />
@@ -505,7 +505,7 @@ export function Insights({ isAdminView = false }: { isAdminView?: boolean }) {
           <p className="text-3.5xl font-black text-slate-800 tracking-tight">
             <AnimatedCounter value={metrics.totalValidated + metrics.totalRevalidated} />
           </p>
-          <p className="text-[11px] font-bold text-slate-400 mt-1">Out of {metrics.totalStudents} total students</p>
+          <p className="text-[11px] font-bold text-slate-400 mt-1">Out of {metrics.totalStudents} visited students</p>
         </motion.div>
       </div>
 
