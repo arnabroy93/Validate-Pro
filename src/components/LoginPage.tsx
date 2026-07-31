@@ -24,7 +24,7 @@ export function LoginPage() {
       controls.start({
         scale: [1, 1.08, 1],
         rotate: [0, -4, 4, 0],
-        transition: { type: "spring", stiffness: 300, damping: 10 }
+        transition: { duration: 0.4, ease: "easeInOut" }
       });
     }
   }, [username, controls]);
