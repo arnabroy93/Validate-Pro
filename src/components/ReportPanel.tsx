@@ -9,13 +9,15 @@ import {
   Loader2,
   Eye,
   X,
-  FileText
+  FileText,
+  Clock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { cn, formatDate, formatTime } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { ValidationHistoryModal } from './ValidationHistoryModal';
 
 interface BatchSummary {
   center_code: string;
@@ -31,6 +33,8 @@ interface BatchSummary {
   validated_by: string;
   batch_start_date: string;
   program_name: string;
+  visit_count?: number;
+  total_absent_count?: number;
 }
 
 const calculateDaysSince = (startDateStr: string) => {
@@ -58,6 +62,7 @@ export function ReportPanel() {
   
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [selectedBatchesForExport, setSelectedBatchesForExport] = useState<Set<string>>(new Set());
+  const [historyModalStudent, setHistoryModalStudent] = useState<any | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -147,6 +152,8 @@ export function ReportPanel() {
             validated_by: '',
             batch_start_date: student.batch_start_date || '',
             program_name: student.program_name || '',
+            visit_count: 1,
+            total_absent_count: 0,
             validatorSet: new Set()
           });
         }
@@ -155,7 +162,16 @@ export function ReportPanel() {
         summary.total_students += 1;
         
         const validationRow = vDataMap.get(`${student.batch_code}_${student.student_code}`);
-        
+        const studentVisit = validationRow?.visit_count ? Number(validationRow.visit_count) : 1;
+        const studentAbsent = validationRow?.absent_count !== undefined && validationRow?.absent_count !== null 
+          ? Number(validationRow.absent_count) 
+          : (validationRow?.status === 'Absent' ? 1 : 0);
+
+        if (studentVisit > (summary.visit_count || 1)) {
+          summary.visit_count = studentVisit;
+        }
+        summary.total_absent_count = (summary.total_absent_count || 0) + studentAbsent;
+
         if (validationRow?.aligned_ae || validationRow?.ae_name) {
           summary.assigned_ae = validationRow.aligned_ae || validationRow.ae_name || summary.assigned_ae;
         }
@@ -194,7 +210,11 @@ export function ReportPanel() {
             recording_link: validationRow?.recording_link || '',
             mic_on: validationRow?.mic_on || false,
             video_on: validationRow?.video_on || false,
-            created_at: validationRow?.created_at || null
+            visit_count: studentVisit,
+            absent_count: studentAbsent,
+            validation_history: Array.isArray(validationRow?.validation_history) ? validationRow.validation_history : [],
+            created_at: validationRow?.created_at || null,
+            updated_at: validationRow?.updated_at || null
         });
       });
       
@@ -222,6 +242,9 @@ export function ReportPanel() {
       'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
       'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
       'Validation Status': v.status,
+      'Validation Visit': v.visit_count || 1,
+      'Times Marked Absent': v.absent_count || (v.status === 'Absent' ? 1 : 0),
+      'Validation Attempts': (v.validation_history || []).length || (v.created_at ? 1 : 0),
       'Validation Type': v.validation_type || 'N/A',
       'Recording Link': v.recording_link || 'N.A.',
       'Remarks': v.remarks || 'N/A',
@@ -256,11 +279,11 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.visit_count || 1, v.absent_count || (v.status === 'Absent' ? 1 : 0), (v.validation_history || []).length || (v.created_at ? 1 : 0), v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Date', 'Time']],
+      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Visit #', 'Absent Count', 'Attempts', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Date', 'Time']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -518,6 +541,7 @@ export function ReportPanel() {
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Batch Start Date</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Days Since Start</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Total Students</th>
+                  <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Visit #</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Validation</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Revalidation</th>
                   <th className="px-6 py-5 bg-[#f8fafc] sticky top-0">Pending</th>
@@ -564,6 +588,9 @@ export function ReportPanel() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-black text-brand-text">{s.total_students}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-200">Visit #{s.visit_count || 1}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-black text-emerald-600">{s.validated}</span>
@@ -676,6 +703,9 @@ export function ReportPanel() {
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Mic</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Camera</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Status</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Visit #</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Times Absent</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">History Log</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Type</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Recording Link</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Remarks</th>
@@ -746,6 +776,30 @@ export function ReportPanel() {
                             </span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
+                            <span className="font-bold text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200">
+                              Visit #{v.visit_count || 1}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "font-bold text-xs px-2 py-1 rounded-lg border",
+                              (v.absent_count || (v.status === 'Absent' ? 1 : 0)) > 0 
+                                ? "bg-amber-50 text-amber-700 border-amber-200" 
+                                : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {v.absent_count || (v.status === 'Absent' ? 1 : 0)}x
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <button
+                              onClick={() => setHistoryModalStudent(v)}
+                              className="btn-secondary py-1 px-2.5 text-[10px] flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 cursor-pointer"
+                              title="View full attempt log & validation history"
+                            >
+                              <Clock size={12} /> History ({(v.validation_history || []).length || (v.created_at ? 1 : 0)})
+                            </button>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
                               v.validation_type === 'Online' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
@@ -783,6 +837,11 @@ export function ReportPanel() {
         )}
       </AnimatePresence>
 
+      <ValidationHistoryModal
+        isOpen={!!historyModalStudent}
+        onClose={() => setHistoryModalStudent(null)}
+        student={historyModalStudent}
+      />
     </div>
   );
 }

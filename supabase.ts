@@ -42,6 +42,21 @@ export type Profile = {
   created_at: string;
 };
 
+export type ValidationAttemptLog = {
+  id?: string;
+  attempt_number: number;
+  visit_count: number;
+  absent_count: number;
+  status: string;
+  validated_by: string;
+  date: string;
+  remarks?: string;
+  validation_type?: string;
+  recording_link?: string;
+  mic_on?: boolean;
+  video_on?: boolean;
+};
+
 export type StudentValidation = {
   id?: string;
   student_code: string;
@@ -61,6 +76,11 @@ export type StudentValidation = {
   validation_type?: string;
   mic_on?: boolean;
   video_on?: boolean;
+  visit_count?: number;
+  absent_count?: number;
+  attempt_number?: number;
+  validation_history?: ValidationAttemptLog[];
   created_at?: string;
+  updated_at?: string;
   user_id?: string;
 };

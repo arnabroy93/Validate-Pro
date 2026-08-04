@@ -68,7 +68,29 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS video_on BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validation_type TEXT;`;
     await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS visit_count INTEGER DEFAULT 1;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS absent_count INTEGER DEFAULT 0;`;
+    await sql`ALTER TABLE public.student_validations ADD COLUMN IF NOT EXISTS validation_history JSONB DEFAULT '[]'::jsonb;`;
+
+    // Drop any potential NOT NULL constraints on columns that might cause insert errors
+    try {
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN ae_name DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN aligned_ae DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN student_name DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN student_code DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN center_code DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN batch_code DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN validated_by DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN remarks DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN recording_link DROP NOT NULL;`;
+      await sql`ALTER TABLE public.student_validations ALTER COLUMN validation_type DROP NOT NULL;`;
+    } catch (err) {
+      console.warn('Non-fatal: could not drop NOT NULL constraint on student_validations:', err);
+    }
+
     await sql`UPDATE public.student_validations SET validation_type = 'N.A.' WHERE validation_type IS NULL;`;
+    await sql`UPDATE public.student_validations SET ae_name = '' WHERE ae_name IS NULL;`;
+    await sql`UPDATE public.student_validations SET aligned_ae = '' WHERE aligned_ae IS NULL;`;
 
     // Ensure batch_students has batch_start_date, program_name, education_qualification
     try {
@@ -1157,7 +1179,14 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
   app.post('/api/validations/save', async (req, res) => {
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
-      const { record } = req.body;
+      let { record } = req.body;
+      if (record) {
+        record = {
+          ...record,
+          ae_name: record.ae_name || record.aligned_ae || '',
+          aligned_ae: record.aligned_ae || record.ae_name || ''
+        };
+      }
       
       let result;
       if (record.id) {
@@ -1182,15 +1211,23 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
   app.post('/api/validations/submit', async (req, res) => {
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase admin SDK not available' });
-      const { recordsToInsert, recordsToUpdate } = req.body;
+      let { recordsToInsert, recordsToUpdate } = req.body;
       
+      const sanitizeRecord = (r: any) => ({
+        ...r,
+        ae_name: r.ae_name || r.aligned_ae || '',
+        aligned_ae: r.aligned_ae || r.ae_name || ''
+      });
+
       if (recordsToInsert && recordsToInsert.length > 0) {
-        const { error } = await supabaseAdmin.from('student_validations').insert(recordsToInsert);
+        const cleaned = recordsToInsert.map(sanitizeRecord);
+        const { error } = await supabaseAdmin.from('student_validations').insert(cleaned);
         if (error) throw error;
       }
       
       if (recordsToUpdate && recordsToUpdate.length > 0) {
-        const { error } = await supabaseAdmin.from('student_validations').upsert(recordsToUpdate);
+        const cleaned = recordsToUpdate.map(sanitizeRecord);
+        const { error } = await supabaseAdmin.from('student_validations').upsert(cleaned);
         if (error) throw error;
       }
       
@@ -1234,7 +1271,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         if (globalSql) {
           try {
             const rows = await globalSql`
-              SELECT id, user_id, status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type
+              SELECT id, user_id, status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type, visit_count, absent_count, validation_history
               FROM public.student_validations;
             `;
             allData = rows.map(r => ({
@@ -1257,7 +1294,10 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
               address: r.address || null,
               mic_on: r.mic_on || false,
               video_on: r.video_on || false,
-              validation_type: r.validation_type || 'N.A.'
+              validation_type: r.validation_type || 'N.A.',
+              visit_count: Number(r.visit_count) || 1,
+              absent_count: Number(r.absent_count) || 0,
+              validation_history: Array.isArray(r.validation_history) ? r.validation_history : []
             }));
             
             allData.sort((a, b) => {

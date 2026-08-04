@@ -20,10 +20,14 @@ import {
   RefreshCcw,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Clock,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
+import { ValidationHistoryModal } from './ValidationHistoryModal';
+import { ValidationAttemptLog } from '../../supabase';
 
 export function Dashboard() {
   const { user, profile } = useAuth();
@@ -41,6 +45,10 @@ export function Dashboard() {
   const [studentSearch, setStudentSearch] = useState('');
   const [sortField, setSortField] = useState<'student_code' | 'student_name'>('student_code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Visit Count & Validation History Modal State
+  const [currentBatchVisit, setCurrentBatchVisit] = useState<number>(1);
+  const [historyModalStudent, setHistoryModalStudent] = useState<Partial<StudentValidation> | null>(null);
 
   const validatedBy = profile?.username || '';
 
@@ -211,6 +219,8 @@ export function Dashboard() {
         const loadedValidations: Record<string, Partial<StudentValidation>> = {};
         let existingLink = '';
         let existingValType = '';
+        let maxVisit = 1;
+
         existingRecords.forEach((record: any) => {
           if (!existingLink && record.recording_link && record.recording_link !== 'N.A.') {
             existingLink = record.recording_link;
@@ -218,6 +228,9 @@ export function Dashboard() {
           if (!existingValType && record.validation_type && record.validation_type !== 'N.A.') {
             existingValType = record.validation_type;
           }
+          const recVisit = Number(record.visit_count) || 1;
+          if (recVisit > maxVisit) maxVisit = recVisit;
+
           loadedValidations[record.student_code] = {
             id: record.id,
             status: record.status as any,
@@ -225,10 +238,16 @@ export function Dashboard() {
             recording_link: record.recording_link || 'N.A.',
             validation_type: record.validation_type || 'N.A.',
             mic_on: record.mic_on,
-            video_on: record.video_on
+            video_on: record.video_on,
+            visit_count: recVisit,
+            absent_count: Number(record.absent_count) || (record.status === 'Absent' ? 1 : 0),
+            validation_history: Array.isArray(record.validation_history) ? record.validation_history : [],
+            created_at: record.created_at,
+            updated_at: record.updated_at
           };
         });
         
+        setCurrentBatchVisit(maxVisit);
         // Only safely update everything since this is our first time loading this batch
         setValidations(loadedValidations);
         if (existingLink) {
@@ -551,24 +570,28 @@ export function Dashboard() {
     const v = { ...(validations[studentCode] || {}), ...optimisticUpdate };
 
     const record: any = {
-      student_code: student.student_code,
-      student_name: student.student_name,
-      ae_name: student.ae_name,
-      center_code: student.center_code,
-      batch_code: student.batch_code,
+      student_code: student.student_code || '',
+      student_name: student.student_name || '',
+      ae_name: student.ae_name || student.aligned_ae || alignedAe || '',
+      center_code: student.center_code || '',
+      batch_code: student.batch_code || '',
       dob: student.dob ? String(student.dob) : '',
-      father_name: student.father_name,
-      address: student.address,
-      validated_by: validatedBy,
-      aligned_ae: alignedAe || '',
+      father_name: student.father_name || '',
+      address: student.address || '',
+      validated_by: validatedBy || '',
+      aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
       status: v.status || 'Pending',
       remarks: v.remarks || '',
       recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
       validation_type: validationType || 'N.A.',
       mic_on: v.mic_on || false,
       video_on: v.video_on || false,
+      visit_count: v.visit_count || currentBatchVisit,
+      absent_count: v.absent_count || (v.status === 'Absent' ? 1 : 0),
+      validation_history: v.validation_history || [],
       user_id: user.id,
-      created_at: new Date().toISOString()
+      created_at: v.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
     
     if (v.id) {
@@ -585,15 +608,16 @@ export function Dashboard() {
       if (res.ok) {
         const savedData = await res.json();
         // If it was newly inserted, update State with specific ID so future updates hit the same row
-        if (v.id !== savedData.id) {
-          setValidations(prev => ({
-            ...prev,
-            [studentCode]: {
-              ...prev[studentCode],
-              id: savedData.id
-            }
-          }));
-        }
+        setValidations(prev => ({
+          ...prev,
+          [studentCode]: {
+            ...prev[studentCode],
+            id: savedData.id,
+            visit_count: savedData.visit_count || record.visit_count,
+            absent_count: savedData.absent_count || record.absent_count,
+            validation_history: savedData.validation_history || record.validation_history
+          }
+        }));
       } else {
         const err = await res.json();
         console.error('Autosave error:', err);
@@ -603,18 +627,174 @@ export function Dashboard() {
     }
   };
 
+  const handleNewVisit = async () => {
+    if (!selectedBatch) return;
+    const nextVisit = currentBatchVisit + 1;
+    setCurrentBatchVisit(nextVisit);
+
+    const nowIso = new Date().toISOString();
+    const updatedValidations: Record<string, Partial<StudentValidation>> = { ...validations };
+    const recordsToSave: any[] = [];
+    const dirtySet = new Set(dirtyStudents);
+
+    filteredStudents.forEach(student => {
+      const studentCode = student.student_code;
+      const currentVal = updatedValidations[studentCode] || {};
+      const oldStatus = currentVal.status || 'Pending';
+      const oldAbsentCount = currentVal.absent_count !== undefined && currentVal.absent_count !== null
+        ? Number(currentVal.absent_count)
+        : (oldStatus === 'Absent' ? 1 : 0);
+
+      let newAbsentCount = oldAbsentCount;
+      // If validator didn't make any changes and student remains 'Absent', increment absent count for this new visit
+      if (oldStatus === 'Absent') {
+        newAbsentCount = oldAbsentCount + 1;
+      }
+
+      const existingHistory: ValidationAttemptLog[] = Array.isArray(currentVal.validation_history) 
+        ? [...currentVal.validation_history] 
+        : [];
+
+      const newLogItem: ValidationAttemptLog = {
+        id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        attempt_number: existingHistory.length + 1,
+        visit_count: nextVisit,
+        absent_count: newAbsentCount,
+        status: oldStatus,
+        validated_by: validatedBy,
+        date: nowIso,
+        remarks: currentVal.remarks || '',
+        validation_type: validationType || 'N.A.',
+        recording_link: batchRecordingLink || 'N.A.',
+        mic_on: Boolean(currentVal.mic_on),
+        video_on: Boolean(currentVal.video_on)
+      };
+
+      const updatedHistory = [...existingHistory, newLogItem];
+
+      const studentUpdate: Partial<StudentValidation> = {
+        ...currentVal,
+        visit_count: nextVisit,
+        absent_count: newAbsentCount,
+        validation_history: updatedHistory,
+        updated_at: nowIso
+      };
+
+      updatedValidations[studentCode] = studentUpdate;
+      dirtySet.add(studentCode);
+
+      const record: any = {
+        student_code: student.student_code || '',
+        student_name: student.student_name || '',
+        ae_name: student.ae_name || student.aligned_ae || alignedAe || '',
+        center_code: student.center_code || '',
+        batch_code: student.batch_code || '',
+        dob: student.dob ? String(student.dob) : '',
+        father_name: student.father_name || '',
+        address: student.address || '',
+        validated_by: validatedBy || '',
+        aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
+        status: oldStatus,
+        remarks: currentVal.remarks || '',
+        recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
+        validation_type: validationType || 'N.A.',
+        mic_on: Boolean(currentVal.mic_on),
+        video_on: Boolean(currentVal.video_on),
+        visit_count: nextVisit,
+        absent_count: newAbsentCount,
+        validation_history: updatedHistory,
+        user_id: user?.id || '',
+        created_at: currentVal.created_at || nowIso,
+        updated_at: nowIso
+      };
+
+      if (currentVal.id) {
+        record.id = currentVal.id;
+      }
+      recordsToSave.push(record);
+    });
+
+    setValidations(updatedValidations);
+    setDirtyStudents(dirtySet);
+
+    if (recordsToSave.length > 0) {
+      try {
+        const recordsToInsert = recordsToSave.filter(r => !r.id);
+        const recordsToUpdate = recordsToSave.filter(r => r.id);
+        const res = await fetch('/api/validations/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recordsToInsert, recordsToUpdate })
+        });
+        if (res.ok) {
+          toast.success(`Started Visit #${nextVisit}. Updated visit counts & absent records for batch ${selectedBatch}.`);
+        }
+      } catch (e) {
+        console.error('Error auto-saving new visit records:', e);
+      }
+    }
+  };
+
   const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
     setDirtyStudents(prev => new Set(prev).add(studentCode));
+    
+    const currentVal = validations[studentCode] || {};
+    const oldStatus = currentVal.status;
+    const oldAbsentCount = currentVal.absent_count || (oldStatus === 'Absent' ? 1 : 0);
+    
+    let updatedAbsentCount = oldAbsentCount;
+    if (field === 'status') {
+      if (value === 'Absent') {
+        if (oldStatus !== 'Absent') {
+          updatedAbsentCount = oldAbsentCount + 1;
+        } else {
+          updatedAbsentCount = Math.max(1, oldAbsentCount);
+        }
+        toast.success(`Marked absent (Visit #${currentBatchVisit}, Absent ${updatedAbsentCount}x)`);
+      } else if (oldStatus === 'Absent' && value !== 'Absent') {
+        updatedAbsentCount = Math.max(0, oldAbsentCount - 1);
+        toast.success(`Updated status to ${value} (Visit #${currentBatchVisit}, Absent ${updatedAbsentCount}x)`);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const existingHistory: ValidationAttemptLog[] = Array.isArray(currentVal.validation_history) ? [...currentVal.validation_history] : [];
+    
+    const newLogItem: ValidationAttemptLog = {
+      id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      attempt_number: existingHistory.length + 1,
+      visit_count: currentBatchVisit,
+      absent_count: updatedAbsentCount,
+      status: field === 'status' ? (value || 'Pending') : (currentVal.status || 'Pending'),
+      validated_by: validatedBy,
+      date: nowIso,
+      remarks: currentVal.remarks || '',
+      validation_type: validationType || 'N.A.',
+      recording_link: batchRecordingLink || 'N.A.',
+      mic_on: field === 'mic_on' ? Boolean(value) : (currentVal.mic_on || false),
+      video_on: field === 'video_on' ? Boolean(value) : (currentVal.video_on || false)
+    };
+
+    const updatedHistory = [...existingHistory, newLogItem];
+
+    const optimisticUpdate: Partial<StudentValidation> = {
+      [field]: value,
+      visit_count: currentBatchVisit,
+      absent_count: updatedAbsentCount,
+      validation_history: updatedHistory,
+      updated_at: nowIso
+    };
+
     // 1. Optimistic update
     setValidations(prev => ({
       ...prev,
       [studentCode]: {
         ...prev[studentCode],
-        [field]: value
+        ...optimisticUpdate
       }
     }));
 
-    autosaveValidation(studentCode, { [field]: value });
+    autosaveValidation(studentCode, optimisticUpdate);
   };
 
   const handleRemarksBlur = (studentCode: string) => {
@@ -679,24 +859,28 @@ export function Dashboard() {
 
       const v = validations[student.student_code] || {};
       const record: any = {
-        student_code: student.student_code,
-        student_name: student.student_name,
-        ae_name: student.ae_name,
-        center_code: student.center_code,
-        batch_code: student.batch_code,
+        student_code: student.student_code || '',
+        student_name: student.student_name || '',
+        ae_name: student.ae_name || student.aligned_ae || alignedAe || '',
+        center_code: student.center_code || '',
+        batch_code: student.batch_code || '',
         dob: student.dob ? String(student.dob) : '',
-        father_name: student.father_name,
-        address: student.address,
-        validated_by: validatedBy,
-        aligned_ae: alignedAe || '',
+        father_name: student.father_name || '',
+        address: student.address || '',
+        validated_by: validatedBy || '',
+        aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
         status: v.status || 'Pending',
         remarks: v.remarks || '',
         recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
         validation_type: validationType || 'N.A.',
         mic_on: v.mic_on || false,
         video_on: v.video_on || false,
+        visit_count: v.visit_count || currentBatchVisit,
+        absent_count: v.absent_count || (v.status === 'Absent' ? 1 : 0),
+        validation_history: v.validation_history || [],
         user_id: user.id,
-        created_at: new Date().toISOString()
+        created_at: v.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
       if (v.id) {
@@ -920,6 +1104,22 @@ export function Dashboard() {
                     <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider text-nowrap">Status</p>
                     <p className="font-bold text-xl text-nowrap">Running</p>
                   </div>
+                  <div className="text-right flex flex-col items-end">
+                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider text-nowrap">Validation Visit</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-bold text-xl bg-white/20 px-2.5 py-0.5 rounded-lg backdrop-blur-sm border border-white/30">
+                        Visit #{currentBatchVisit}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleNewVisit}
+                        className="px-2.5 py-1 text-xs font-bold bg-white text-teal-800 hover:bg-teal-50 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        title="Start a new visit attempt for this batch and auto-update visit & absent counts"
+                      >
+                        <Plus size={12} /> New Visit
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
 
@@ -1092,7 +1292,27 @@ export function Dashboard() {
                           >
                             <td className="px-6 py-4 text-sm font-mono text-brand-primary font-semibold">{student.student_code}</td>
                             <td className="px-6 py-4">
-                              <p className="text-sm font-semibold text-brand-text">{student.student_name}</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-brand-text">{student.student_name}</p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {(v.absent_count || (v.status === 'Absent' ? 1 : 0)) > 0 && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/10 text-amber-700 border border-amber-500/30">
+                                      Absent: {v.absent_count || (v.status === 'Absent' ? 1 : 0)}x
+                                    </span>
+                                  )}
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/10 text-blue-700 border border-blue-500/30">
+                                    Visit #{v.visit_count || currentBatchVisit}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setHistoryModalStudent({ ...student, ...v })}
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1 cursor-pointer"
+                                    title="View validation attempts & history"
+                                  >
+                                    <Clock size={10} /> History ({(v.validation_history || []).length || (v.created_at ? 1 : 0)})
+                                  </button>
+                                </div>
+                              </div>
                               <div className="mt-1 space-y-0.5">
                                 <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
                                   <span className="opacity-60 text-[8px] uppercase">Mob:</span> {student.mobile_no || 'N/A'}
@@ -1318,6 +1538,12 @@ export function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ValidationHistoryModal 
+        isOpen={!!historyModalStudent} 
+        onClose={() => setHistoryModalStudent(null)} 
+        student={historyModalStudent} 
+      />
     </div>
   );
 }
