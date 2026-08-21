@@ -560,82 +560,13 @@ export function Dashboard() {
     }));
   };
 
-  const autosaveValidation = async (studentCode: string, optimisticUpdate: Partial<StudentValidation> = {}) => {
-    if (!validatedBy || !user) return;
-    
-    // 2. Prepare autosave
-    const student = filteredStudents.find(s => s.student_code === studentCode);
-    if (!student) return;
-
-    // Get current state with the optimistic update
-    const v = { ...(validations[studentCode] || {}), ...optimisticUpdate };
-
-    const record: any = {
-      student_code: student.student_code || '',
-      student_name: student.student_name || '',
-      ae_name: student.ae_name || student.aligned_ae || alignedAe || '',
-      center_code: student.center_code || '',
-      batch_code: student.batch_code || '',
-      dob: student.dob ? String(student.dob) : '',
-      father_name: student.father_name || '',
-      address: student.address || '',
-      validated_by: validatedBy || '',
-      aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
-      status: v.status || 'Pending',
-      remarks: v.remarks || '',
-      recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
-      validation_type: validationType || 'N.A.',
-      mic_on: v.mic_on || false,
-      video_on: v.video_on || false,
-      visit_count: v.visit_count || currentBatchVisit,
-      absent_count: v.absent_count || (v.status === 'Absent' ? 1 : 0),
-      validation_history: v.validation_history || [],
-      user_id: user.id,
-      created_at: v.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    if (v.id) {
-      record.id = v.id;
-    }
-
-    try {
-      const res = await fetch('/api/validations/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ record })
-      });
-
-      if (res.ok) {
-        const savedData = await res.json();
-        // If it was newly inserted, update State with specific ID so future updates hit the same row
-        setValidations(prev => ({
-          ...prev,
-          [studentCode]: {
-            ...prev[studentCode],
-            id: savedData.id,
-            visit_count: savedData.visit_count || record.visit_count,
-            absent_count: savedData.absent_count || record.absent_count,
-            validation_history: savedData.validation_history || record.validation_history
-          }
-        }));
-      } else {
-        const err = await res.json();
-        console.error('Autosave error:', err);
-      }
-    } catch (e) {
-      console.error('Autosave failed:', e);
-    }
-  };
-
-  const handleNewVisit = async () => {
+  const handleNewVisit = () => {
     if (!selectedBatch) return;
     const nextVisit = currentBatchVisit + 1;
     setCurrentBatchVisit(nextVisit);
 
-    const nowIso = new Date().toISOString();
+    // Update students in local UI state to associate with the new visit count
     const updatedValidations: Record<string, Partial<StudentValidation>> = { ...validations };
-    const recordsToSave: any[] = [];
     const dirtySet = new Set(dirtyStudents);
 
     filteredStudents.forEach(student => {
@@ -647,101 +578,31 @@ export function Dashboard() {
         : (oldStatus === 'Absent' ? 1 : 0);
 
       let newAbsentCount = oldAbsentCount;
-      // If validator didn't make any changes and student remains 'Absent', increment absent count for this new visit
       if (oldStatus === 'Absent') {
         newAbsentCount = oldAbsentCount + 1;
       }
 
-      const existingHistory: ValidationAttemptLog[] = Array.isArray(currentVal.validation_history) 
-        ? [...currentVal.validation_history] 
-        : [];
-
-      const newLogItem: ValidationAttemptLog = {
-        id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        attempt_number: existingHistory.length + 1,
-        visit_count: nextVisit,
-        absent_count: newAbsentCount,
-        status: oldStatus,
-        validated_by: validatedBy,
-        date: nowIso,
-        remarks: currentVal.remarks || '',
-        validation_type: validationType || 'N.A.',
-        recording_link: batchRecordingLink || 'N.A.',
-        mic_on: Boolean(currentVal.mic_on),
-        video_on: Boolean(currentVal.video_on)
-      };
-
-      const updatedHistory = [...existingHistory, newLogItem];
-
-      const studentUpdate: Partial<StudentValidation> = {
+      updatedValidations[studentCode] = {
         ...currentVal,
         visit_count: nextVisit,
-        absent_count: newAbsentCount,
-        validation_history: updatedHistory,
-        updated_at: nowIso
+        absent_count: newAbsentCount
       };
-
-      updatedValidations[studentCode] = studentUpdate;
       dirtySet.add(studentCode);
-
-      const record: any = {
-        student_code: student.student_code || '',
-        student_name: student.student_name || '',
-        ae_name: student.ae_name || student.aligned_ae || alignedAe || '',
-        center_code: student.center_code || '',
-        batch_code: student.batch_code || '',
-        dob: student.dob ? String(student.dob) : '',
-        father_name: student.father_name || '',
-        address: student.address || '',
-        validated_by: validatedBy || '',
-        aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
-        status: oldStatus,
-        remarks: currentVal.remarks || '',
-        recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
-        validation_type: validationType || 'N.A.',
-        mic_on: Boolean(currentVal.mic_on),
-        video_on: Boolean(currentVal.video_on),
-        visit_count: nextVisit,
-        absent_count: newAbsentCount,
-        validation_history: updatedHistory,
-        user_id: user?.id || '',
-        created_at: currentVal.created_at || nowIso,
-        updated_at: nowIso
-      };
-
-      if (currentVal.id) {
-        record.id = currentVal.id;
-      }
-      recordsToSave.push(record);
     });
 
     setValidations(updatedValidations);
     setDirtyStudents(dirtySet);
-
-    if (recordsToSave.length > 0) {
-      try {
-        const recordsToInsert = recordsToSave.filter(r => !r.id);
-        const recordsToUpdate = recordsToSave.filter(r => r.id);
-        const res = await fetch('/api/validations/submit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recordsToInsert, recordsToUpdate })
-        });
-        if (res.ok) {
-          toast.success(`Started Visit #${nextVisit}. Updated visit counts & absent records for batch ${selectedBatch}.`);
-        }
-      } catch (e) {
-        console.error('Error auto-saving new visit records:', e);
-      }
-    }
+    toast.success(`Validation Visit #${nextVisit} started for ${selectedBatch}. Review statuses and click "Save Changes" to save records and history.`);
   };
 
-  const handleCheckboxChange = async (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
+  const handleCheckboxChange = (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
     setDirtyStudents(prev => new Set(prev).add(studentCode));
     
     const currentVal = validations[studentCode] || {};
     const oldStatus = currentVal.status;
-    const oldAbsentCount = currentVal.absent_count || (oldStatus === 'Absent' ? 1 : 0);
+    const oldAbsentCount = currentVal.absent_count !== undefined && currentVal.absent_count !== null
+      ? Number(currentVal.absent_count)
+      : (oldStatus === 'Absent' ? 1 : 0);
     
     let updatedAbsentCount = oldAbsentCount;
     if (field === 'status') {
@@ -751,62 +612,38 @@ export function Dashboard() {
         } else {
           updatedAbsentCount = Math.max(1, oldAbsentCount);
         }
-        toast.success(`Marked absent (Visit #${currentBatchVisit}, Absent ${updatedAbsentCount}x)`);
+        toast(`Marked absent for Visit #${currentBatchVisit} (Absent ${updatedAbsentCount}x)`, { icon: 'ℹ️' });
       } else if (oldStatus === 'Absent' && value !== 'Absent') {
         updatedAbsentCount = Math.max(0, oldAbsentCount - 1);
-        toast.success(`Updated status to ${value} (Visit #${currentBatchVisit}, Absent ${updatedAbsentCount}x)`);
+        toast(`Status updated to ${value || 'Pending'}`, { icon: 'ℹ️' });
       }
     }
 
-    const nowIso = new Date().toISOString();
-    const existingHistory: ValidationAttemptLog[] = Array.isArray(currentVal.validation_history) ? [...currentVal.validation_history] : [];
-    
-    const newLogItem: ValidationAttemptLog = {
-      id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      attempt_number: existingHistory.length + 1,
-      visit_count: currentBatchVisit,
-      absent_count: updatedAbsentCount,
-      status: field === 'status' ? (value || 'Pending') : (currentVal.status || 'Pending'),
-      validated_by: validatedBy,
-      date: nowIso,
-      remarks: currentVal.remarks || '',
-      validation_type: validationType || 'N.A.',
-      recording_link: batchRecordingLink || 'N.A.',
-      mic_on: field === 'mic_on' ? Boolean(value) : (currentVal.mic_on || false),
-      video_on: field === 'video_on' ? Boolean(value) : (currentVal.video_on || false)
-    };
-
-    const updatedHistory = [...existingHistory, newLogItem];
-
-    const optimisticUpdate: Partial<StudentValidation> = {
-      [field]: value,
-      visit_count: currentBatchVisit,
-      absent_count: updatedAbsentCount,
-      validation_history: updatedHistory,
-      updated_at: nowIso
-    };
-
-    // 1. Optimistic update
     setValidations(prev => ({
       ...prev,
       [studentCode]: {
         ...prev[studentCode],
-        ...optimisticUpdate
+        [field]: value,
+        visit_count: currentBatchVisit,
+        absent_count: updatedAbsentCount
       }
     }));
-
-    autosaveValidation(studentCode, optimisticUpdate);
   };
 
   const handleRemarksBlur = (studentCode: string) => {
+    // Keep dirty tracking intact without calling auto-save API
     setDirtyStudents(prev => new Set(prev).add(studentCode));
-    autosaveValidation(studentCode);
   };
 
   const handleSubmit = async () => {
     if (!selectedBatch) return;
     if (!validatedBy) {
       toast.error('User profile not fully loaded. Please reload.');
+      return;
+    }
+
+    if (dirtyStudents.size === 0) {
+      toast('No changes to save.', { icon: 'ℹ️' });
       return;
     }
     
@@ -823,9 +660,6 @@ export function Dashboard() {
       return;
     }
 
-    const recordsToInsert: any[] = [];
-    const recordsToUpdate: any[] = [];
-    
     // Validate remarks
     for (const student of filteredStudents) {
       if (!dirtyStudents.has(student.student_code)) continue;
@@ -849,16 +683,49 @@ export function Dashboard() {
       }
 
       if (status === 'Rejected' && !remarks) {
-        toast.error(`Remarks are mandatory when status is Rejected`);
+        toast.error(`Remarks are mandatory when status is Rejected (${student.student_name || student.student_code})`);
         setLoading(false);
         return;
       }
     }
 
+    const recordsToInsert: any[] = [];
+    const recordsToUpdate: any[] = [];
+    const nowIso = new Date().toISOString();
+    const updatedValidationsMap: Record<string, Partial<StudentValidation>> = { ...validations };
+    
     filteredStudents.forEach(student => {
       if (!dirtyStudents.has(student.student_code)) return;
 
       const v = validations[student.student_code] || {};
+      const status = v.status || 'Pending';
+      const visitCount = v.visit_count || currentBatchVisit;
+      const absentCount = v.absent_count !== undefined && v.absent_count !== null
+        ? Number(v.absent_count)
+        : (status === 'Absent' ? 1 : 0);
+
+      const existingHistory: ValidationAttemptLog[] = Array.isArray(v.validation_history) 
+        ? [...v.validation_history] 
+        : [];
+
+      // Record a new history attempt snapshot exclusively when Save Changes is clicked
+      const newLogItem: ValidationAttemptLog = {
+        id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        attempt_number: existingHistory.length + 1,
+        visit_count: visitCount,
+        absent_count: absentCount,
+        status: status,
+        validated_by: validatedBy,
+        date: nowIso,
+        remarks: v.remarks || '',
+        validation_type: validationType || 'N.A.',
+        recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
+        mic_on: Boolean(v.mic_on),
+        video_on: Boolean(v.video_on)
+      };
+
+      const updatedHistory = [...existingHistory, newLogItem];
+
       const record: any = {
         student_code: student.student_code || '',
         student_name: student.student_name || '',
@@ -870,18 +737,18 @@ export function Dashboard() {
         address: student.address || '',
         validated_by: validatedBy || '',
         aligned_ae: alignedAe || student.ae_name || student.aligned_ae || '',
-        status: v.status || 'Pending',
+        status: status,
         remarks: v.remarks || '',
         recording_link: validationType === 'Online' ? (batchRecordingLink || 'N.A.') : 'N.A.',
         validation_type: validationType || 'N.A.',
-        mic_on: v.mic_on || false,
-        video_on: v.video_on || false,
-        visit_count: v.visit_count || currentBatchVisit,
-        absent_count: v.absent_count || (v.status === 'Absent' ? 1 : 0),
-        validation_history: v.validation_history || [],
+        mic_on: Boolean(v.mic_on),
+        video_on: Boolean(v.video_on),
+        visit_count: visitCount,
+        absent_count: absentCount,
+        validation_history: updatedHistory,
         user_id: user.id,
-        created_at: v.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: v.created_at || nowIso,
+        updated_at: nowIso
       };
       
       if (v.id) {
@@ -890,6 +757,14 @@ export function Dashboard() {
       } else {
         recordsToInsert.push(record);
       }
+
+      updatedValidationsMap[student.student_code] = {
+        ...v,
+        visit_count: visitCount,
+        absent_count: absentCount,
+        validation_history: updatedHistory,
+        updated_at: nowIso
+      };
     });
 
     try {
@@ -903,7 +778,9 @@ export function Dashboard() {
         const err = await res.json();
         throw new Error(err.error || 'Failed to submit validations');
       }
-      toast.success('Batch validations submitted successfully!');
+
+      setValidations(updatedValidationsMap);
+      toast.success('Batch validations saved and history recorded successfully!');
       setDirtyStudents(new Set()); // Reset dirty state
     } catch (error: any) {
       let errMsg = error.message || 'Error submitting data';
@@ -966,10 +843,19 @@ export function Dashboard() {
             whileTap={{ scale: 0.98 }}
             disabled={loading || !selectedBatch || !validationType}
             onClick={handleSubmit}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50 shadow-md hover:shadow-lg transition-all duration-300"
+            className={cn(
+              "btn-primary flex items-center gap-2 disabled:opacity-50 shadow-md hover:shadow-lg transition-all duration-300 relative",
+              dirtyStudents.size > 0 && "ring-2 ring-emerald-400 ring-offset-1"
+            )}
+            title={dirtyStudents.size > 0 ? `${dirtyStudents.size} pending change(s) ready to save` : "Save Changes"}
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
-            Save Changes
+            <span>Save Changes</span>
+            {dirtyStudents.size > 0 && (
+              <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+                {dirtyStudents.size}
+              </span>
+            )}
           </motion.button>
         </div>
       </header>
