@@ -92,11 +92,12 @@ async function runMigrations(isManual = false) {
     await sql`UPDATE public.student_validations SET ae_name = '' WHERE ae_name IS NULL;`;
     await sql`UPDATE public.student_validations SET aligned_ae = '' WHERE aligned_ae IS NULL;`;
 
-    // Ensure batch_students has batch_start_date, program_name, education_qualification
+    // Ensure batch_students has batch_start_date, program_name, education_qualification, enrollment_status
     try {
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS batch_start_date TEXT;`;
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS program_name TEXT;`;
       await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS education_qualification TEXT;`;
+      await sql`ALTER TABLE public.batch_students ADD COLUMN IF NOT EXISTS enrollment_status TEXT;`;
     } catch(e) {}
 
     // Ensure excel_uploads table exists
@@ -1066,7 +1067,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         if (globalSql) {
           try {
             const rows = await globalSql`
-              SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at
+              SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
               FROM public.batch_students;
             `;
             allData = rows.map(r => ({
@@ -1081,6 +1082,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
               father_name: r.father_name || null,
               address: r.address || null,
               batch_status: r.batch_status || null,
+              enrollment_status: r.enrollment_status || r.batch_status || null,
               batch_start_date: r.batch_start_date || null,
               program_name: r.program_name || null,
               education_qualification: r.education_qualification || null,
@@ -1112,14 +1114,32 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
           const result: any = await fetchWithRetry(async () =>
             await supabaseAdmin
               .from('batch_students')
-              .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+              .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at')
               .order('id', { ascending: false })
               .range(currentFrom, currentFrom + limit - 1)
           );
 
-          if (result.error) throw result.error;
-          if (result.data && result.data.length > 0) {
-            allData = [...allData, ...result.data];
+          if (result.error) {
+            // If enrollment_status column select failed on postgrest cache, retry without it
+            const retryRes: any = await fetchWithRetry(async () =>
+              await supabaseAdmin
+                .from('batch_students')
+                .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, batch_start_date, program_name, education_qualification, created_at')
+                .order('id', { ascending: false })
+                .range(currentFrom, currentFrom + limit - 1)
+            );
+            if (retryRes.error) throw retryRes.error;
+            if (retryRes.data && retryRes.data.length > 0) {
+              const mapped = retryRes.data.map((r: any) => ({ ...r, enrollment_status: r.batch_status || null }));
+              allData = [...allData, ...mapped];
+              from += limit;
+              if (retryRes.data.length < limit) hasMore = false;
+            } else {
+              hasMore = false;
+            }
+          } else if (result.data && result.data.length > 0) {
+            const mapped = result.data.map((r: any) => ({ ...r, enrollment_status: r.enrollment_status || r.batch_status || null }));
+            allData = [...allData, ...mapped];
             from += limit;
             if (result.data.length < limit) hasMore = false;
           } else {

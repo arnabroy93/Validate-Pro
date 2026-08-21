@@ -244,7 +244,7 @@ export function ReportPanel() {
       'Validation Status': v.status,
       'Validation Visit': v.visit_count || 1,
       'Times Marked Absent': v.absent_count || (v.status === 'Absent' ? 1 : 0),
-      'Validation Attempts': (v.validation_history || []).length || (v.created_at ? 1 : 0),
+      'Validation Attempts': Array.isArray(v.validation_history) ? v.validation_history.length : 0,
       'Validation Type': v.validation_type || 'N/A',
       'Recording Link': v.recording_link || 'N.A.',
       'Remarks': v.remarks || 'N/A',
@@ -279,7 +279,7 @@ export function ReportPanel() {
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
     const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.visit_count || 1, v.absent_count || (v.status === 'Absent' ? 1 : 0), (v.validation_history || []).length || (v.created_at ? 1 : 0), v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
+      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.visit_count || 1, v.absent_count || (v.status === 'Absent' ? 1 : 0), Array.isArray(v.validation_history) ? v.validation_history.length : 0, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
     ]);
     
     (doc as any).autoTable({
@@ -796,7 +796,7 @@ export function ReportPanel() {
                               className="btn-secondary py-1 px-2.5 text-[10px] flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 cursor-pointer"
                               title="View full attempt log & validation history"
                             >
-                              <Clock size={12} /> History ({(v.validation_history || []).length || (v.created_at ? 1 : 0)})
+                              <Clock size={12} /> History ({Array.isArray(v.validation_history) ? v.validation_history.length : 0})
                             </button>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">

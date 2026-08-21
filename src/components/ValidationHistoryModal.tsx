@@ -17,26 +17,17 @@ export const ValidationHistoryModal: React.FC<ValidationHistoryModalProps> = ({
 }) => {
   if (!isOpen || !student) return null;
 
-  const history: ValidationAttemptLog[] = Array.isArray(student.validation_history) && student.validation_history.length > 0
-    ? student.validation_history
-    : [
-        {
-          attempt_number: 1,
-          visit_count: student.visit_count || 1,
-          absent_count: student.absent_count || (student.status === 'Absent' ? 1 : 0),
-          status: student.status || 'Pending',
-          validated_by: student.validated_by || 'N/A',
-          date: student.updated_at || student.created_at || new Date().toISOString(),
-          remarks: student.remarks || 'Initial state',
-          validation_type: student.validation_type || 'N.A.',
-          recording_link: student.recording_link || 'N.A.',
-          mic_on: student.mic_on || false,
-          video_on: student.video_on || false
-        }
-      ];
+  // Only display real, explicitly saved validation attempt logs
+  const history: ValidationAttemptLog[] = Array.isArray(student.validation_history)
+    ? student.validation_history.filter(
+        h => h && h.validated_by && h.validated_by !== 'N/A' && h.remarks !== 'Initial state'
+      )
+    : [];
 
-  const totalAbsentCount = student.absent_count || history.filter(h => h.status === 'Absent').length || (student.status === 'Absent' ? 1 : 0);
-  const totalVisitCount = student.visit_count || Math.max(1, ...history.map(h => h.visit_count || 1));
+  const totalAbsentCount = student.absent_count !== undefined && student.absent_count !== null
+    ? Number(student.absent_count)
+    : history.filter(h => h.status === 'Absent').length || (student.status === 'Absent' ? 1 : 0);
+  const totalVisitCount = student.visit_count || (history.length > 0 ? Math.max(1, ...history.map(h => h.visit_count || 1)) : 1);
 
   return (
     <AnimatePresence>
@@ -115,74 +106,86 @@ export const ValidationHistoryModal: React.FC<ValidationHistoryModalProps> = ({
                 </h4>
                 <span className="text-[11px] font-medium text-slate-400">Showing {history.length} record(s)</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-[#f8fafc] border-b border-brand-border">
-                    <tr className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                      <th className="px-4 py-3">Attempt #</th>
-                      <th className="px-4 py-3">Visit #</th>
-                      <th className="px-4 py-3">Date & Time</th>
-                      <th className="px-4 py-3">Validated By</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Absent Count</th>
-                      <th className="px-4 py-3">Mic / Cam</th>
-                      <th className="px-4 py-3">Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-brand-divide text-xs">
-                    {history.map((h, i) => (
-                      <tr key={h.id || `hist-${i}`} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-brand-primary">
-                          Attempt #{h.attempt_number || i + 1}
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-slate-700">
-                          Visit #{h.visit_count || 1}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <p className="font-mono font-bold text-slate-700">{formatDate(h.date)}</p>
-                          <p className="font-mono text-[10px] text-slate-400">{formatTime(h.date)}</p>
-                        </td>
-                        <td className="px-4 py-3 font-bold text-slate-700">
-                          {h.validated_by || 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
-                            h.status === 'Validated' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                            h.status === 'ReValidated' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
-                            h.status === 'Absent' ? "bg-slate-100 text-slate-800 border-slate-300" :
-                            h.status === 'Rejected' ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
-                            "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                          )}>
-                            {h.status || 'Pending'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-slate-700">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded border text-[10px]",
-                            (h.absent_count || (h.status === 'Absent' ? 1 : 0)) > 0 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-400 border-slate-200"
-                          )}>
-                            {h.absent_count || (h.status === 'Absent' ? 1 : 0)} x
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 text-[10px]">
-                            <span className={cn("px-1.5 py-0.5 rounded font-bold border", h.mic_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200")}>
-                              Mic: {h.mic_on ? 'On' : 'Off'}
-                            </span>
-                            <span className={cn("px-1.5 py-0.5 rounded font-bold border", h.video_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200")}>
-                              Cam: {h.video_on ? 'On' : 'Off'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={h.remarks}>
-                          {h.remarks || 'N/A'}
-                        </td>
+              {history.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-[#f8fafc] border-b border-brand-border">
+                      <tr className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                        <th className="px-4 py-3">Attempt #</th>
+                        <th className="px-4 py-3">Visit #</th>
+                        <th className="px-4 py-3">Date & Time</th>
+                        <th className="px-4 py-3">Validated By</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Absent Count</th>
+                        <th className="px-4 py-3">Mic / Cam</th>
+                        <th className="px-4 py-3">Remarks</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-brand-divide text-xs">
+                      {history.map((h, i) => (
+                        <tr key={h.id || `hist-${i}`} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-brand-primary">
+                            Attempt #{h.attempt_number || i + 1}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                            Visit #{h.visit_count || 1}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <p className="font-mono font-bold text-slate-700">{formatDate(h.date)}</p>
+                            <p className="font-mono text-[10px] text-slate-400">{formatTime(h.date)}</p>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-700">
+                            {h.validated_by || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
+                              h.status === 'Validated' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                              h.status === 'ReValidated' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
+                              h.status === 'Absent' ? "bg-slate-100 text-slate-800 border-slate-300" :
+                              h.status === 'Rejected' ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
+                              "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                            )}>
+                              {h.status || 'Pending'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded border text-[10px]",
+                              (h.absent_count || (h.status === 'Absent' ? 1 : 0)) > 0 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {h.absent_count || (h.status === 'Absent' ? 1 : 0)} x
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              <span className={cn("px-1.5 py-0.5 rounded font-bold border", h.mic_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200")}>
+                                Mic: {h.mic_on ? 'On' : 'Off'}
+                              </span>
+                              <span className={cn("px-1.5 py-0.5 rounded font-bold border", h.video_on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200")}>
+                                Cam: {h.video_on ? 'On' : 'Off'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={h.remarks}>
+                            {h.remarks || 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center space-y-2">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    <Clock size={20} />
+                  </div>
+                  <p className="text-sm font-bold text-slate-700">No Validation Attempts Recorded</p>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Validation logs and validator names are saved only when an active validator reviews this student and clicks <span className="font-semibold text-slate-600">"Save Changes"</span>.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

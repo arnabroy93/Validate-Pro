@@ -26,6 +26,7 @@ export type BatchStudent = {
   father_name: string;
   address: string;
   batch_status: string;
+  enrollment_status?: string;
   batch_start_date?: string;
   program_name?: string;
   education_qualification?: string;

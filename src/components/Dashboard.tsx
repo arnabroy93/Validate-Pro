@@ -21,12 +21,10 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Clock,
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
-import { ValidationHistoryModal } from './ValidationHistoryModal';
 import { ValidationAttemptLog } from '../../supabase';
 
 export function Dashboard() {
@@ -46,9 +44,8 @@ export function Dashboard() {
   const [sortField, setSortField] = useState<'student_code' | 'student_name'>('student_code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Visit Count & Validation History Modal State
+  // Visit Count State
   const [currentBatchVisit, setCurrentBatchVisit] = useState<number>(1);
-  const [historyModalStudent, setHistoryModalStudent] = useState<Partial<StudentValidation> | null>(null);
 
   const validatedBy = profile?.username || '';
 
@@ -242,6 +239,8 @@ export function Dashboard() {
             visit_count: recVisit,
             absent_count: Number(record.absent_count) || (record.status === 'Absent' ? 1 : 0),
             validation_history: Array.isArray(record.validation_history) ? record.validation_history : [],
+            validated_by: record.validated_by || '',
+            aligned_ae: record.aligned_ae || record.ae_name || '',
             created_at: record.created_at,
             updated_at: record.updated_at
           };
@@ -339,6 +338,7 @@ export function Dashboard() {
             father_name: normalized['fathername'] || normalized['fathersname'] || '',
             address: normalized['address'] || '',
             batch_status: normalized['batchstatus'] || normalized['status'] || '',
+            enrollment_status: normalized['enrollmentstatus'] || normalized['enrollment_status'] || normalized['enrollstatus'] || normalized['studentstatus'] || normalized['admissionstatus'] || normalized['batchstatus'] || normalized['status'] || '',
             batch_start_date: (normalized['batchstartdate'] || normalized['startdate']) ? String(normalized['batchstartdate'] || normalized['startdate']) : '',
             program_name: normalized['programname'] || normalized['program'] || '',
             education_qualification: normalized['educationqualification'] || normalized['qualification'] || normalized['highestqualification'] || '',
@@ -360,7 +360,7 @@ export function Dashboard() {
             const batchChunk = importedBatchCodes.slice(i, i + chunkSize);
             const { data: bData, error: fetchErr } = await supabase
               .from('batch_students')
-              .select('id, student_code, batch_code, center_code, batch_start_date, program_name, education_qualification, student_name, mobile_no, dob, father_name, address, batch_status, ae_name')
+              .select('id, student_code, batch_code, center_code, batch_start_date, program_name, education_qualification, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, ae_name')
               .in('batch_code', batchChunk);
               
             if (fetchErr) throw new Error(fetchErr.message);
@@ -399,6 +399,7 @@ export function Dashboard() {
                  if (newRow.father_name && existingRecord.father_name !== newRow.father_name) return true;
                  if (newRow.address && existingRecord.address !== newRow.address) return true;
                  if (newRow.batch_status && existingRecord.batch_status !== newRow.batch_status) return true;
+                 if (newRow.enrollment_status && existingRecord.enrollment_status !== newRow.enrollment_status) return true;
                  if (newRow.ae_name && existingRecord.ae_name !== newRow.ae_name) return true;
              }
              return false;
@@ -416,6 +417,7 @@ export function Dashboard() {
                  father_name: newRow.father_name || existingRecord.father_name,
                  address: newRow.address || existingRecord.address,
                  batch_status: newRow.batch_status || existingRecord.batch_status,
+                 enrollment_status: newRow.enrollment_status || existingRecord.enrollment_status || existingRecord.batch_status,
                  ae_name: newRow.ae_name || existingRecord.ae_name
              };
           });
@@ -1177,7 +1179,30 @@ export function Dashboard() {
                             key={studentKey} 
                             className={cn(idx % 2 === 0 ? "bg-white/20" : "bg-white/10", "hover-lift backdrop-blur-sm")}
                           >
-                            <td className="px-6 py-4 text-sm font-mono text-brand-primary font-semibold">{student.student_code}</td>
+                            <td className="px-6 py-4 align-top">
+                              <div className="flex flex-col gap-1.5 items-start">
+                                <span className="text-sm font-mono text-brand-primary font-bold tracking-tight">
+                                  {student.student_code}
+                                </span>
+                                <div 
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100/90 border border-slate-200/90 text-[10px] font-medium text-slate-700 shadow-xs"
+                                  title={`Enrollment Status: ${student.enrollment_status || student.batch_status || 'N/A'}`}
+                                >
+                                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400">Enrollment:</span>
+                                  <span className={cn(
+                                    "font-bold text-[10px]",
+                                    (student.enrollment_status || student.batch_status || '').toLowerCase().includes('running') ? "text-emerald-700" :
+                                    (student.enrollment_status || student.batch_status || '').toLowerCase().includes('enrolled') ? "text-emerald-700" :
+                                    (student.enrollment_status || student.batch_status || '').toLowerCase().includes('active') ? "text-blue-700" :
+                                    (student.enrollment_status || student.batch_status || '').toLowerCase().includes('drop') ? "text-rose-700" :
+                                    (student.enrollment_status || student.batch_status || '').toLowerCase().includes('complete') ? "text-indigo-700" :
+                                    "text-slate-700"
+                                  )}>
+                                    {student.enrollment_status || student.batch_status || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-brand-text">{student.student_name}</p>
@@ -1190,14 +1215,6 @@ export function Dashboard() {
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/10 text-blue-700 border border-blue-500/30">
                                     Visit #{v.visit_count || currentBatchVisit}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setHistoryModalStudent({ ...student, ...v })}
-                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1 cursor-pointer"
-                                    title="View validation attempts & history"
-                                  >
-                                    <Clock size={10} /> History ({(v.validation_history || []).length || (v.created_at ? 1 : 0)})
-                                  </button>
                                 </div>
                               </div>
                               <div className="mt-1 space-y-0.5">
@@ -1425,12 +1442,6 @@ export function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <ValidationHistoryModal 
-        isOpen={!!historyModalStudent} 
-        onClose={() => setHistoryModalStudent(null)} 
-        student={historyModalStudent} 
-      />
     </div>
   );
 }
