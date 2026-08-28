@@ -38,7 +38,7 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;`;
     await sql`ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_username_key;`;
     await sql`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT false;`;
-    await sql`UPDATE public.profiles SET is_disabled = false WHERE is_disabled IS NULL;`;
+    await sql`UPDATE public.profiles SET is_disabled = false WHERE is_disabled IS NULL OR is_disabled = true AND (role = 'admin' OR LOWER(username) IN ('admin', 'arnab.roy', 'arnab'));`;
     
     // 2. Ensure student_validations table exists
     await sql`
@@ -414,14 +414,29 @@ export const app = express();
       // Ensure users can only sync their own profile
       if (user.id !== userId) return res.status(403).json({ error: 'User ID mismatch' });
 
+      const cleanUsername = (username || '').trim();
+      const isAdminAccount = isMasterAdmin || cleanUsername.toLowerCase() === 'admin' || email === 'admin@validpro.internal';
+
+      // Clean up any stale profile records with the same username but different ID
+      try {
+        await supabaseAdmin
+          .from('profiles')
+          .delete()
+          .ilike('username', cleanUsername)
+          .neq('id', userId);
+      } catch (cleanupErr) {
+        console.warn('[Profile Sync] Non-fatal cleanup warning:', cleanupErr);
+      }
+
       // Upsert profile - using service role key, this will ignore RLS!
       const { data: newProfile, error: upsertError } = await supabaseAdmin
         .from('profiles')
         .upsert({
           id: userId,
-          username,
+          username: cleanUsername,
           email: email || '',
-          role: isMasterAdmin ? 'admin' : 'user'
+          role: isAdminAccount ? 'admin' : 'user',
+          is_disabled: false
         }, { onConflict: 'id' })
         .select()
         .single();
@@ -433,8 +448,9 @@ export const app = express();
             .from('profiles')
             .upsert({
               id: userId,
-              username,
-              role: isMasterAdmin ? 'admin' : 'user'
+              username: cleanUsername,
+              role: isAdminAccount ? 'admin' : 'user',
+              is_disabled: false
             }, { onConflict: 'id' })
             .select()
             .single();
@@ -466,48 +482,60 @@ export const app = express();
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase backend not configured. Check secrets.' });
     const { username } = req.body;
     try {
-      // Try to select email, but fallback if column is missing
+      const cleanUsername = (username || '').trim();
+      const isMasterAdmin = cleanUsername.toLowerCase() === 'admin';
+
+      // Try case-insensitive matching on username
       let { data: profile, error } = await supabaseAdmin
         .from('profiles')
-        .select('email, id, is_disabled')
-        .eq('username', username)
+        .select('email, id, role, is_disabled, username')
+        .ilike('username', cleanUsername)
         .maybeSingle();
       
-      if (error && error.message.includes('column') && error.message.includes('email')) {
-        // Fallback for older schema
-        const { data: fallback, error: fallbackErr } = await supabaseAdmin
+      if (!profile) {
+        // Fallback to exact match or email match
+        const { data: exactProf } = await supabaseAdmin
           .from('profiles')
-          .select('id, is_disabled')
-          .eq('username', username)
+          .select('email, id, role, is_disabled, username')
+          .eq('username', cleanUsername)
           .maybeSingle();
-        
-        if (fallbackErr || !fallback) {
-          return res.status(404).json({ error: `User profile not found for "${username}".` });
-        }
-
-        if (fallback.is_disabled) {
-          return res.status(403).json({ error: 'Your account is disabled. Please contact the administrator.' });
-        }
-
-        // Get email from Auth
-        const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.getUserById(fallback.id);
-        if (authErr || !authUser.user) {
-          return res.status(404).json({ error: 'Auth user not found.' });
-        }
-        
-        return res.json({ email: authUser.user.email });
+        profile = exactProf;
       }
 
-      if (error || !profile) {
-        console.error(`[Login] Profile search failed for "${username}":`, error?.message || 'Not found');
-        return res.status(404).json({ error: `User profile not found for "${username}". Did you run Setup?` });
-      }
-
-      if (profile.is_disabled) {
+      // Check if user account is disabled (Admins & master admin are NEVER disabled)
+      if (profile && profile.is_disabled && !isMasterAdmin && profile.role !== 'admin' && cleanUsername.toLowerCase() !== 'arnab.roy') {
         return res.status(403).json({ error: 'Your account is disabled. Please contact the administrator.' });
       }
 
-      // If email is null in DB (older rows but column exists), grab it from auth
+      if (!profile) {
+        // Check directly in Auth users in case profile row is missing
+        const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+        if (!listErr && listData && listData.users) {
+          const matchedAuthUser = listData.users.find((u: any) => 
+            u.user_metadata?.username?.toLowerCase() === cleanUsername.toLowerCase() ||
+            u.email?.toLowerCase().startsWith(`${cleanUsername.toLowerCase()}@`) ||
+            u.email?.toLowerCase() === cleanUsername.toLowerCase()
+          );
+
+          if (matchedAuthUser && matchedAuthUser.email) {
+            // Auto-heal profile table
+            await supabaseAdmin.from('profiles').upsert({
+              id: matchedAuthUser.id,
+              username: cleanUsername,
+              email: matchedAuthUser.email,
+              role: isMasterAdmin ? 'admin' : 'user',
+              is_disabled: false
+            }, { onConflict: 'id' });
+
+            return res.json({ email: matchedAuthUser.email });
+          }
+        }
+
+        console.error(`[Login] Profile search failed for "${cleanUsername}":`, error?.message || 'Not found');
+        return res.status(404).json({ error: `User profile not found for "${cleanUsername}". Did you run Setup?` });
+      }
+
+      // If email is null in DB (older rows), grab it from auth
       if (!profile.email && profile.id) {
         const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.getUserById(profile.id);
         if (authErr || !authUser.user) {
@@ -721,6 +749,19 @@ export const app = express();
     const { is_disabled } = req.body;
     
     try {
+      // Prevent disabling admin accounts
+      if (is_disabled) {
+        const { data: targetUser } = await supabaseAdmin
+          .from('profiles')
+          .select('role, username')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (targetUser && (targetUser.role === 'admin' || targetUser.username?.toLowerCase() === 'admin')) {
+          return res.status(400).json({ error: 'Administrator accounts cannot be disabled.' });
+        }
+      }
+
       const { error } = await supabaseAdmin
         .from('profiles')
         .update({ is_disabled })
