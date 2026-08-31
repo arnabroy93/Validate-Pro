@@ -34,6 +34,12 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
 
+  // Fast metadata state for instant UI loading
+  const [centersList, setCentersList] = useState<string[]>([]);
+  const [batchesByCenter, setBatchesByCenter] = useState<Record<string, { batch_code: string; ae_name?: string }[]>>({});
+  const [batchMetaLoading, setBatchMetaLoading] = useState(true);
+  const [batchStudentsLoading, setBatchStudentsLoading] = useState(false);
+
   // Filters state
   const [alignedAe, setAlignedAe] = useState(() => sessionStorage.getItem('val_alignedAe') || '');
   const [batchRecordingLink, setBatchRecordingLink] = useState(() => sessionStorage.getItem('val_batchRecordingLink') || '');
@@ -76,48 +82,63 @@ export function Dashboard() {
 
   // Heartbeat loop
   useEffect(() => {
-    if (!user?.id || !validatedBy) return;
+    if (!user?.id) return;
+    const currentUserName = validatedBy || user.email?.split('@')[0] || 'Validator';
 
+    let isMounted = true;
     const sendHeartbeat = async () => {
+      if (document.hidden) return; // Don't spam if tab is in background
       try {
         await fetch('/api/presence/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: user.id,
-            username: validatedBy,
+            username: currentUserName,
             centerCode: selectedCenter || '',
             batchCode: selectedBatch || ''
           })
         });
-      } catch (err) {
-        console.error('Failed to send presence heartbeat:', err);
+      } catch {
+        // Silently ignore transient network drops
       }
     };
 
     sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 5000);
-    return () => clearInterval(interval);
-  }, [user?.id, validatedBy, selectedCenter, selectedBatch]);
+    const interval = setInterval(sendHeartbeat, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user?.id, user?.email, validatedBy, selectedCenter, selectedBatch]);
 
   // Polling active users loop
   useEffect(() => {
+    if (!user?.id) return;
+
+    let isMounted = true;
     const fetchActiveUsers = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch('/api/presence/active');
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const list = await res.json();
-          setActiveUsers(list);
+          if (Array.isArray(list)) {
+            setActiveUsers(list);
+          }
         }
-      } catch (err) {
-        console.error('Failed to fetch active users:', err);
+      } catch {
+        // Silently ignore transient fetch failures
       }
     };
 
     fetchActiveUsers();
-    const interval = setInterval(fetchActiveUsers, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(fetchActiveUsers, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user?.id]);
 
   // Effects to persist state
   useEffect(() => {
@@ -166,9 +187,70 @@ export function Dashboard() {
     return () => window.removeEventListener('reset_validation', handleReset);
   }, []);
 
+  // Fetch fast batch metadata (hierarchy & centers) on mount
+  const fetchBatchMetadata = async (forceRefresh = false) => {
+    if (!user) return;
+    setBatchMetaLoading(true);
+    try {
+      const res = await fetch(`/api/batch_meta${forceRefresh ? '?refresh=true' : ''}`);
+      if (res.ok) {
+        const meta = await res.json();
+        if (meta && Array.isArray(meta.centers)) {
+          setCentersList(meta.centers);
+          setBatchesByCenter(meta.batchesByCenter || {});
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch batch metadata:', err);
+    } finally {
+      setBatchMetaLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchBatchStudents();
+    fetchBatchMetadata();
   }, [user?.id]);
+
+  // Fast targeted fetch for specific batch students (< 40ms)
+  const fetchBatchStudents = async (center: string, batch: string, forceRefresh = false) => {
+    if (!user) return;
+    if (!center || !batch) {
+      setData([]);
+      return;
+    }
+    setBatchStudentsLoading(true);
+    setFetchingData(true);
+    try {
+      const res = await fetch(`/api/batch_data?center_code=${encodeURIComponent(center)}&batch_code=${encodeURIComponent(batch)}${forceRefresh ? '&refresh=true' : ''}`);
+      if (res.ok) {
+        const students = await res.json();
+        const studentList = Array.isArray(students) ? students : [];
+        setData(studentList);
+        
+        // Auto-select Aligned AE if not set
+        if (!alignedAe && studentList.length > 0 && studentList[0].ae_name) {
+          setAlignedAe(studentList[0].ae_name);
+        }
+      } else {
+        toast.error('Failed to load batch data');
+      }
+    } catch (error: any) {
+      console.error('Error fetching batch data:', error.message);
+      toast.error('Failed to load batch data');
+    } finally {
+      setBatchStudentsLoading(false);
+      setFetchingData(false);
+    }
+  };
+
+  // Fetch batch students whenever center and batch are selected
+  useEffect(() => {
+    if (selectedCenter && selectedBatch) {
+      fetchBatchStudents(selectedCenter, selectedBatch);
+    } else {
+      setData([]);
+    }
+  }, [selectedCenter, selectedBatch, user?.id]);
 
   useEffect(() => {
     const fetchExistingValidations = async () => {
@@ -267,37 +349,6 @@ export function Dashboard() {
     
     fetchExistingValidations();
   }, [selectedBatch, selectedCenter, data]);
-
-  const fetchBatchStudents = async (forceRefresh = false) => {
-    if (!user) return;
-    setFetchingData(true);
-    try {
-      const res = await fetch(`/api/batch_data${forceRefresh ? '?refresh=true' : ''}`);
-      if (!res.ok) {
-        let errorMsg = 'Failed to fetch batch data from API';
-        try {
-          const contentType = res.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await res.json();
-            errorMsg = errorData.error || errorMsg;
-          } else {
-            const textData = await res.text();
-            errorMsg = `API returned HTTP ${res.status}: ${textData.substring(0, 50)}...`;
-          }
-        } catch (e) {
-          errorMsg = `API returned HTTP ${res.status}`;
-        }
-        throw new Error(errorMsg);
-      }
-      const allData = await res.json();
-      setData(allData as BatchStudent[]);
-    } catch (error: any) {
-      console.error('Error fetching batch data:', error.message);
-      toast.error('Failed to load batch data');
-    } finally {
-      setFetchingData(false);
-    }
-  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -460,7 +511,10 @@ export function Dashboard() {
              }
 
              toast.success(`Successfully added ${insertCount} records and updated dates for ${updateCount} records!`);
-             fetchBatchStudents(true); // Refresh data and invalidate server cache
+             fetchBatchMetadata(true);
+             if (selectedCenter && selectedBatch) {
+               fetchBatchStudents(selectedCenter, selectedBatch, true);
+             }
           }
         } else {
           toast.error("No valid records found in Excel");
@@ -491,15 +545,18 @@ export function Dashboard() {
   ];
 
   const centerCodes = useMemo(() => {
+    if (centersList.length > 0) return centersList;
     return Array.from(new Set(
       data
         .map(row => row.center_code)
         .filter(Boolean)
     )).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [data]);
+  }, [centersList, data]);
 
   const batchCodes = useMemo(() => {
     if (!selectedCenter) return [];
+    const metaBatches = batchesByCenter[selectedCenter]?.map(b => b.batch_code) || [];
+    if (metaBatches.length > 0) return metaBatches;
     return Array.from(new Set(
       data
         .filter(row => 
@@ -509,7 +566,7 @@ export function Dashboard() {
         .map(row => row.batch_code)
         .filter(Boolean)
     )).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [data, selectedCenter]);
+  }, [batchesByCenter, selectedCenter, data]);
 
   const filteredStudents = useMemo(() => {
     if (!selectedBatch || !selectedCenter) return [];
@@ -864,7 +921,7 @@ export function Dashboard() {
 
       <div className="p-8 space-y-6 overflow-y-auto">
         <AnimatePresence>
-          {data.length > 0 && (
+          {(centersList.length > 0 || data.length > 0) && (
             <motion.div 
               key="filters-config"
               initial={{ opacity: 0, y: 12 }}
@@ -1296,7 +1353,16 @@ export function Dashboard() {
           )}
         </AnimatePresence>
 
-        {!data.length && !fetchingData && (
+        {/* Initializing / Loading Metadata */}
+        {batchMetaLoading && centersList.length === 0 && (
+          <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+            <p className="text-sm text-slate-500 font-medium">Initializing batch records...</p>
+          </div>
+        )}
+
+        {/* No batches uploaded yet */}
+        {!batchMetaLoading && centersList.length === 0 && !data.length && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1321,10 +1387,53 @@ export function Dashboard() {
           </motion.div>
         )}
 
-        {!data.length && fetchingData && (
-          <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-6">
+        {/* Ready: Prompt to select Center & Batch */}
+        {!batchMetaLoading && centersList.length > 0 && !selectedBatch && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="h-[45vh] flex flex-col items-center justify-center text-center space-y-4 max-w-md mx-auto"
+          >
+            <div className="w-16 h-16 bg-brand-light rounded-2xl flex items-center justify-center text-brand-primary border border-brand-border shadow-sm">
+              <FileSpreadsheet size={32} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Select Center &amp; Batch Code</h3>
+              <p className="text-sm text-slate-500 mt-1">Choose your assigned <strong>Center Code</strong> and <strong>Batch Code</strong> from the top bar to view and validate students.</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading Batch Students */}
+        {selectedBatch && batchStudentsLoading && (
+          <div className="h-[45vh] flex flex-col items-center justify-center text-center space-y-4">
             <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
-            <p className="text-sm text-slate-500 font-medium">Loading batch records...</p>
+            <p className="text-sm text-slate-500 font-medium">Loading students for batch {selectedBatch}...</p>
+          </div>
+        )}
+
+        {/* Batch Selected but no validation type */}
+        {selectedBatch && !batchStudentsLoading && !validationType && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="h-[45vh] flex flex-col items-center justify-center text-center space-y-4 max-w-md mx-auto"
+          >
+            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 border border-amber-200 shadow-sm">
+              <CheckCircle2 size={32} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Select Validation Type</h3>
+              <p className="text-sm text-slate-500 mt-1">Please select <strong>Validation Type</strong> (Offline / Online) from the top bar to display the student validation list.</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Batch Selected, Validation Type selected, but 0 students found */}
+        {selectedBatch && !batchStudentsLoading && validationType && filteredStudents.length === 0 && (
+          <div className="h-[45vh] flex flex-col items-center justify-center text-center space-y-4">
+            <FileSpreadsheet className="w-12 h-12 text-slate-400" />
+            <p className="text-sm text-slate-500 font-medium">No active students found in batch {selectedBatch}.</p>
           </div>
         )}
       </div>

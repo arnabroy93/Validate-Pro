@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import postgres from 'postgres';
+import compression from 'compression';
 
 dotenv.config();
 
@@ -191,8 +192,12 @@ async function runMigrations(isManual = false) {
     // 6. Add Indexes for performance
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_batch_code ON public.batch_students(batch_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_status ON public.batch_students(batch_status);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_center_batch_status ON public.batch_students(center_code, batch_code, batch_status);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_lookup ON public.batch_students(center_code, batch_code, student_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_batch_code ON public.student_validations(batch_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_status ON public.student_validations(status);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_center_batch ON public.student_validations(center_code, batch_code);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_student ON public.student_validations(student_code);`;
 
     // 7. Force Schema Reload
     await sql`NOTIFY pgrst, 'reload schema';`;
@@ -269,6 +274,17 @@ export const app = express();
     : null;
 
   // Shared Simple Cache to prevent API rate limiting (429) on rapid client requests
+  interface BatchMetaResponse {
+    centers: string[];
+    batchesByCenter: Record<string, { batch_code: string; ae_name?: string }[]>;
+    totalCenters: number;
+    totalBatches: number;
+    totalStudents: number;
+  }
+  let cachedBatchMeta: BatchMetaResponse | null = null;
+  let cachedBatchMetaTime = 0;
+  let activeBatchMetaPromise: Promise<BatchMetaResponse> | null = null;
+
   let cachedBatchStudents: any[] | null = null;
   let cachedBatchStudentsTime = 0;
   let activeBatchStudentsPromise: Promise<any[]> | null = null;
@@ -277,9 +293,12 @@ export const app = express();
   let cachedAllValidationsTime = 0;
   let activeAllValidationsPromise: Promise<any[]> | null = null;
 
-  const CACHE_TTL = 120000; // 2 minutes cache to shield Supabase from rapid/parallel fetching
+  const CACHE_TTL = 300000; // 5 minutes cache to shield Supabase from rapid/parallel fetching
 
   function invalidateCache() {
+    cachedBatchMeta = null;
+    cachedBatchMetaTime = 0;
+    activeBatchMetaPromise = null;
     cachedBatchStudents = null;
     cachedBatchStudentsTime = 0;
     activeBatchStudentsPromise = null;
@@ -287,6 +306,113 @@ export const app = express();
     cachedAllValidationsTime = 0;
     activeAllValidationsPromise = null;
   }
+
+  async function getBatchMeta(forceRefresh = false): Promise<BatchMetaResponse> {
+    const now = Date.now();
+    if (!forceRefresh && cachedBatchMeta && (now - cachedBatchMetaTime < CACHE_TTL)) {
+      return cachedBatchMeta;
+    }
+
+    if (!forceRefresh && activeBatchMetaPromise) {
+      return activeBatchMetaPromise;
+    }
+
+    activeBatchMetaPromise = (async () => {
+      try {
+        let rows: any[] = [];
+        let count = 0;
+
+        if (globalSql) {
+          try {
+            const [hierarchyRows, countRes] = await Promise.all([
+              globalSql`
+                SELECT DISTINCT center_code, batch_code, ae_name
+                FROM public.batch_students
+                WHERE LOWER(batch_status) = 'running'
+                ORDER BY center_code, batch_code;
+              `,
+              globalSql`
+                SELECT count(*)::int as count FROM public.batch_students;
+              `
+            ]);
+            rows = hierarchyRows;
+            count = countRes[0]?.count || 0;
+          } catch (sqlErr) {
+            console.error('[Batch Meta] globalSql query failed, falling back to Supabase SDK:', sqlErr);
+          }
+        }
+
+        if (rows.length === 0 && supabaseAdmin) {
+          const { data, error, count: cCount } = await supabaseAdmin
+            .from('batch_students')
+            .select('center_code, batch_code, ae_name', { count: 'exact' })
+            .ilike('batch_status', 'running');
+
+          if (!error && data) {
+            rows = data;
+            count = cCount || data.length;
+          }
+        }
+
+        const centerSet = new Set<string>();
+        const batchesByCenter: Record<string, { batch_code: string; ae_name?: string }[]> = {};
+        const seenCenterBatch = new Set<string>();
+
+        let totalBatches = 0;
+
+        rows.forEach(r => {
+          const center = (r.center_code || '').trim();
+          const batch = (r.batch_code || '').trim();
+          const ae = (r.ae_name || '').trim();
+
+          if (center) {
+            centerSet.add(center);
+            if (!batchesByCenter[center]) {
+              batchesByCenter[center] = [];
+            }
+            if (batch) {
+              const pairKey = `${center}___${batch}`;
+              if (!seenCenterBatch.has(pairKey)) {
+                seenCenterBatch.add(pairKey);
+                batchesByCenter[center].push({ batch_code: batch, ae_name: ae || undefined });
+                totalBatches++;
+              }
+            }
+          }
+        });
+
+        // Sort centers and batches
+        const centers = Array.from(centerSet).sort((a, b) => a.localeCompare(b));
+        centers.forEach(c => {
+          batchesByCenter[c]?.sort((a, b) => a.batch_code.localeCompare(b.batch_code));
+        });
+
+        const metaResult: BatchMetaResponse = {
+          centers,
+          batchesByCenter,
+          totalCenters: centers.length,
+          totalBatches,
+          totalStudents: count
+        };
+
+        cachedBatchMeta = metaResult;
+        cachedBatchMetaTime = Date.now();
+        return metaResult;
+      } catch (err: any) {
+        console.error('[Batch Meta] Error building batch metadata:', err);
+        throw err;
+      } finally {
+        activeBatchMetaPromise = null;
+      }
+    })();
+
+    return activeBatchMetaPromise;
+  }
+
+  // Pre-warm metadata cache in background
+  setTimeout(() => {
+    getBatchMeta().catch(() => {});
+  }, 1000);
 
   // Robust fetch retry helper for Supabase Queries (Exponential Backoff for Rate Limits 429)
   async function fetchWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
@@ -313,7 +439,21 @@ export const app = express();
     }
   }
 
-  app.use(express.json());
+  // CORS and OPTIONS preflight hander for Power BI/external connectivity
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-PowerBI');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
+  app.use(compression());
+  app.use(express.json({ limit: '50mb' }));
 
   // Live presence state
   interface PresenceInfo {
@@ -326,46 +466,41 @@ export const app = express();
   const activePresence = new Map<string, PresenceInfo>();
 
   app.post('/api/presence/heartbeat', (req, res) => {
-    const { userId, username, centerCode, batchCode } = req.body;
-    if (!userId || !username) {
-      return res.status(400).json({ error: 'userId and username are required' });
+    try {
+      const { userId, username, centerCode, batchCode } = req.body || {};
+      if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
+      }
+      activePresence.set(userId, {
+        userId,
+        username: username || 'Validator',
+        centerCode: centerCode || '',
+        batchCode: batchCode || '',
+        lastActive: Date.now()
+      });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Heartbeat error' });
     }
-    activePresence.set(userId, {
-      userId,
-      username,
-      centerCode: centerCode || '',
-      batchCode: batchCode || '',
-      lastActive: Date.now()
-    });
-    res.json({ success: true });
   });
 
   app.get('/api/presence/active', (req, res) => {
-    const now = Date.now();
-    const activeThreshold = 15000; // 15 seconds of inactivity is offline
-    
-    // Clean up expired ones
-    for (const [userId, presence] of activePresence.entries()) {
-      if (now - presence.lastActive > activeThreshold) {
-        activePresence.delete(userId);
+    try {
+      const now = Date.now();
+      const activeThreshold = 20000; // 20 seconds of inactivity is offline
+      
+      // Clean up expired ones
+      for (const [userId, presence] of activePresence.entries()) {
+        if (now - presence.lastActive > activeThreshold) {
+          activePresence.delete(userId);
+        }
       }
+      
+      const activeUsers = Array.from(activePresence.values());
+      res.json(activeUsers);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Active users error' });
     }
-    
-    const activeUsers = Array.from(activePresence.values());
-    res.json(activeUsers);
-  });
-
-  // CORS and OPTIONS preflight hander for Power BI/external connectivity
-  app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-PowerBI');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-    next();
   });
 
   app.post('/api/admin/refresh-schema', async (req, res) => {
@@ -1077,10 +1212,22 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     }
   });
 
+  // Fast Batch Metadata endpoint (returns distinct centers and running batches instantly)
+  app.get('/api/batch_meta', async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === 'true';
+      const meta = await getBatchMeta(forceRefresh);
+      res.json(meta);
+    } catch (error: any) {
+      console.error('Error in /api/batch_meta:', error.message);
+      res.status(500).json({ error: error.message || 'Failed to fetch batch metadata' });
+    }
+  });
+
   app.get('/api/batch_data', async (req, res) => {
     try {
-      if (!supabaseAdmin) {
-        return res.status(500).json({ error: 'Supabase client not initialized' });
+      if (!supabaseAdmin && !globalSql) {
+        return res.status(500).json({ error: 'Database connection not initialized' });
       }
 
       const forceRefresh = req.query.refresh === 'true';
@@ -1088,7 +1235,63 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         invalidateCache();
       }
 
-      // Check Cache
+      const centerCode = typeof req.query.center_code === 'string' ? req.query.center_code.trim() : '';
+      const batchCode = typeof req.query.batch_code === 'string' ? req.query.batch_code.trim() : '';
+
+      // If metadata only is requested via query param
+      if (req.query.meta === 'true') {
+        const meta = await getBatchMeta(forceRefresh);
+        return res.json(meta);
+      }
+
+      // Fast-path: Targeted query for a specific center & batch (Takes < 40ms, delivers 20KB instead of 66MB)
+      if (centerCode && batchCode) {
+        if (globalSql) {
+          try {
+            const rows = await globalSql`
+              SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
+              FROM public.batch_students
+              WHERE center_code = ${centerCode} AND batch_code = ${batchCode} AND LOWER(batch_status) = 'running'
+              ORDER BY created_at DESC;
+            `;
+            const result = rows.map(r => ({
+              id: r.id,
+              ae_name: r.ae_name || null,
+              center_code: r.center_code || null,
+              batch_code: r.batch_code || null,
+              student_code: r.student_code || null,
+              student_name: r.student_name || null,
+              mobile_no: r.mobile_no || null,
+              dob: r.dob || null,
+              father_name: r.father_name || null,
+              address: r.address || null,
+              batch_status: r.batch_status || null,
+              enrollment_status: r.enrollment_status || r.batch_status || null,
+              batch_start_date: r.batch_start_date || null,
+              program_name: r.program_name || null,
+              education_qualification: r.education_qualification || null,
+              created_at: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at || null)
+            }));
+            return res.json(result);
+          } catch (sqlErr: any) {
+            console.error('[Targeted Batch Data] SQL query failed, falling back to Supabase SDK:', sqlErr);
+          }
+        }
+
+        if (supabaseAdmin) {
+          const { data, error } = await supabaseAdmin
+            .from('batch_students')
+            .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at')
+            .eq('center_code', centerCode)
+            .eq('batch_code', batchCode)
+            .ilike('batch_status', 'running')
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          return res.json(data || []);
+        }
+      }
+
+      // Check Cache for full batch students dump
       const now = Date.now();
       if (!forceRefresh && cachedBatchStudents && (now - cachedBatchStudentsTime < CACHE_TTL)) {
         return res.json(cachedBatchStudents);
@@ -1100,7 +1303,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
         return res.json(data);
       }
 
-      // Start a new coalesced fetch promise
+      // Start a new coalesced fetch promise for full dump
       activeBatchStudentsPromise = (async () => {
         let allData: any[] = [];
 
