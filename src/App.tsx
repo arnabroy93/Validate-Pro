@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { FeaturesProvider, useFeatures } from './hooks/useFeatures';
 import { LoginPage } from './components/LoginPage';
@@ -332,15 +332,54 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 }
 
 function MainContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showEscapeHatch, setShowEscapeHatch] = useState(false);
+
+  useEffect(() => {
+    let timer: any;
+    if (loading) {
+      timer = setTimeout(() => {
+        setShowEscapeHatch(true);
+      }, 1500);
+    } else {
+      setShowEscapeHatch(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-transparent transition-all">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-12 h-12 text-brand-primary animate-spin" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-primary/60">Synchronizing Session</p>
+        <div className="flex flex-col items-center gap-4 text-center px-6 max-w-sm">
+          <Loader2 className="w-10 h-10 text-brand-primary animate-spin" />
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-primary/70">Synchronizing Session</p>
+          
+          {showEscapeHatch && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-2 mt-2"
+            >
+              <p className="text-xs text-slate-500 font-medium">Taking longer than expected?</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="px-3 py-1.5 text-xs font-semibold bg-white/80 hover:bg-white text-slate-700 border border-slate-200 rounded-lg shadow-sm transition-all"
+                >
+                  Go to Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="px-3 py-1.5 text-xs font-semibold bg-brand-primary text-white hover:bg-brand-primary/90 rounded-lg shadow-sm transition-all"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     );
