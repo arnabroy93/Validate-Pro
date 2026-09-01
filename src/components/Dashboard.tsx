@@ -268,9 +268,8 @@ export function Dashboard() {
       }
       
       const studentsInBatch = data.filter(row => 
-        String(row.batch_code) === String(selectedBatch) && 
-        String(row.center_code) === String(selectedCenter) && 
-        String(row.batch_status).toLowerCase() === 'running'
+        String(row.batch_code || '').trim() === String(selectedBatch).trim() && 
+        String(row.center_code || '').trim() === String(selectedCenter).trim()
       );
       
       if (studentsInBatch.length === 0) {
@@ -548,22 +547,21 @@ export function Dashboard() {
     if (centersList.length > 0) return centersList;
     return Array.from(new Set(
       data
-        .map(row => row.center_code)
+        .map(row => (row.center_code || '').trim())
         .filter(Boolean)
     )).sort((a, b) => String(a).localeCompare(String(b)));
   }, [centersList, data]);
 
   const batchCodes = useMemo(() => {
     if (!selectedCenter) return [];
-    const metaBatches = batchesByCenter[selectedCenter]?.map(b => b.batch_code) || [];
-    if (metaBatches.length > 0) return metaBatches;
+    const metaBatches = batchesByCenter[selectedCenter]?.map(b => (b.batch_code || '').trim()).filter(Boolean) || [];
+    if (metaBatches.length > 0) return Array.from(new Set(metaBatches)).sort((a, b) => String(a).localeCompare(String(b)));
     return Array.from(new Set(
       data
         .filter(row => 
-          String(row.center_code).trim() === String(selectedCenter).trim() && 
-          String(row.batch_status).trim().toLowerCase() === 'running'
+          String(row.center_code || '').trim() === String(selectedCenter).trim()
         )
-        .map(row => row.batch_code)
+        .map(row => (row.batch_code || '').trim())
         .filter(Boolean)
     )).sort((a, b) => String(a).localeCompare(String(b)));
   }, [batchesByCenter, selectedCenter, data]);
@@ -575,12 +573,11 @@ export function Dashboard() {
     const studentsMap = new Map();
     
     data.filter(row => 
-      String(row.batch_code).trim() === String(selectedBatch).trim() && 
-      String(row.center_code).trim() === String(selectedCenter).trim() && 
-      String(row.batch_status).trim().toLowerCase() === 'running'
+      String(row.batch_code || '').trim() === String(selectedBatch).trim() && 
+      String(row.center_code || '').trim() === String(selectedCenter).trim()
     ).forEach(student => {
       // If we haven't seen this student yet, or we want the first one encountered (which is the latest created due to backend sort)
-      if (!studentsMap.has(student.student_code)) {
+      if (student.student_code && !studentsMap.has(student.student_code)) {
         studentsMap.set(student.student_code, student);
       }
     });

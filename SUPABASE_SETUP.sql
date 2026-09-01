@@ -155,3 +155,41 @@ DROP POLICY IF EXISTS "Admins can manage excel uploads" ON public.excel_uploads;
 CREATE POLICY "Admins can manage excel uploads" ON public.excel_uploads
   FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
+-- 6. Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_batch_students_center_code ON public.batch_students(center_code);
+CREATE INDEX IF NOT EXISTS idx_batch_students_batch_code ON public.batch_students(batch_code);
+CREATE INDEX IF NOT EXISTS idx_batch_students_status ON public.batch_students(batch_status);
+CREATE INDEX IF NOT EXISTS idx_batch_students_center_batch_status ON public.batch_students(center_code, batch_code, batch_status);
+CREATE INDEX IF NOT EXISTS idx_batch_students_lookup ON public.batch_students(center_code, batch_code, student_code);
+CREATE INDEX IF NOT EXISTS idx_student_validations_batch_code ON public.student_validations(batch_code);
+CREATE INDEX IF NOT EXISTS idx_student_validations_status ON public.student_validations(status);
+CREATE INDEX IF NOT EXISTS idx_student_validations_center_batch ON public.student_validations(center_code, batch_code);
+CREATE INDEX IF NOT EXISTS idx_student_validations_student ON public.student_validations(student_code);
+
+-- 7. Ultra-fast Batch & Center Metadata Function (bypasses REST 1000-row limit for 100% complete center list)
+CREATE OR REPLACE FUNCTION public.get_all_centers_and_batches()
+RETURNS JSONB
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT json_build_object(
+    'hierarchy', COALESCE((
+      SELECT json_agg(json_build_object(
+        'center_code', center_code,
+        'batch_code', batch_code,
+        'ae_name', ae_name,
+        'batch_status', batch_status
+      ))
+      FROM (
+        SELECT DISTINCT center_code, batch_code, ae_name, batch_status
+        FROM public.batch_students
+        WHERE center_code IS NOT NULL AND TRIM(center_code) <> ''
+        ORDER BY center_code, batch_code
+      ) sub
+    ), '[]'::json),
+    'total_students', (SELECT count(*)::int FROM public.batch_students)
+  )::jsonb;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_all_centers_and_batches() TO anon, authenticated, service_role, postgres;
+NOTIFY pgrst, 'reload schema';
+
+

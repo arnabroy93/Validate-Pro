@@ -189,7 +189,33 @@ async function runMigrations(isManual = false) {
       console.log('[Migration] Note: Trigger creation failed (permission check). Using client fallback.');
     }
 
-    // 6. Add Indexes for performance
+    // 6. Add Indexes and RPC Function for ultra-fast hierarchy and center retrieval
+    await sql`
+      CREATE OR REPLACE FUNCTION public.get_all_centers_and_batches()
+      RETURNS JSONB
+      LANGUAGE sql STABLE SECURITY DEFINER AS $$
+        SELECT json_build_object(
+          'hierarchy', COALESCE((
+            SELECT json_agg(json_build_object(
+              'center_code', center_code,
+              'batch_code', batch_code,
+              'ae_name', ae_name,
+              'batch_status', batch_status
+            ))
+            FROM (
+              SELECT DISTINCT center_code, batch_code, ae_name, batch_status
+              FROM public.batch_students
+              WHERE center_code IS NOT NULL AND TRIM(center_code) <> ''
+              ORDER BY center_code, batch_code
+            ) sub
+          ), '[]'::json),
+          'total_students', (SELECT count(*)::int FROM public.batch_students)
+        )::jsonb;
+      $$;
+    `;
+    await sql`GRANT EXECUTE ON FUNCTION public.get_all_centers_and_batches() TO anon, authenticated, service_role, postgres;`;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_center_code ON public.batch_students(center_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_batch_code ON public.batch_students(batch_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_status ON public.batch_students(batch_status);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_center_batch_status ON public.batch_students(center_code, batch_code, batch_status);`;
@@ -322,13 +348,14 @@ export const app = express();
         let rows: any[] = [];
         let count = 0;
 
+        // 1. Direct high-speed SQL query
         if (globalSql) {
           try {
             const [hierarchyRows, countRes] = await Promise.all([
               globalSql`
-                SELECT DISTINCT center_code, batch_code, ae_name
+                SELECT DISTINCT center_code, batch_code, ae_name, batch_status
                 FROM public.batch_students
-                WHERE LOWER(batch_status) = 'running'
+                WHERE center_code IS NOT NULL AND TRIM(center_code) <> ''
                 ORDER BY center_code, batch_code;
               `,
               globalSql`
@@ -342,20 +369,53 @@ export const app = express();
           }
         }
 
+        // 2. Supabase RPC Function (bypasses 1000 row REST limit)
         if (rows.length === 0 && supabaseAdmin) {
-          const { data, error, count: cCount } = await supabaseAdmin
-            .from('batch_students')
-            .select('center_code, batch_code, ae_name', { count: 'exact' })
-            .ilike('batch_status', 'running');
+          try {
+            const { data, error } = await supabaseAdmin.rpc('get_all_centers_and_batches');
+            if (!error && data && Array.isArray(data.hierarchy)) {
+              rows = data.hierarchy;
+              count = data.total_students || data.hierarchy.length;
+            }
+          } catch (rpcErr) {
+            console.warn('[Batch Meta] Supabase RPC get_all_centers_and_batches failed:', rpcErr);
+          }
+        }
 
-          if (!error && data) {
-            rows = data;
-            count = cCount || data.length;
+        // 3. Fallback: Paginated Supabase REST Fetch if needed
+        if (rows.length === 0 && supabaseAdmin) {
+          try {
+            let offset = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            const collected: any[] = [];
+
+            while (hasMore && offset < 50000) {
+              const { data, error } = await supabaseAdmin
+                .from('batch_students')
+                .select('center_code, batch_code, ae_name, batch_status')
+                .range(offset, offset + pageSize - 1);
+
+              if (error || !data || data.length === 0) {
+                hasMore = false;
+              } else {
+                collected.push(...data);
+                if (data.length < pageSize) {
+                  hasMore = false;
+                } else {
+                  offset += pageSize;
+                }
+              }
+            }
+            rows = collected;
+            count = collected.length;
+          } catch (restErr) {
+            console.warn('[Batch Meta] Paginated REST query failed:', restErr);
           }
         }
 
         const centerSet = new Set<string>();
-        const batchesByCenter: Record<string, { batch_code: string; ae_name?: string }[]> = {};
+        const batchesByCenter: Record<string, { batch_code: string; ae_name?: string; batch_status?: string }[]> = {};
         const seenCenterBatch = new Set<string>();
 
         let totalBatches = 0;
@@ -364,6 +424,7 @@ export const app = express();
           const center = (r.center_code || '').trim();
           const batch = (r.batch_code || '').trim();
           const ae = (r.ae_name || '').trim();
+          const status = (r.batch_status || '').trim();
 
           if (center) {
             centerSet.add(center);
@@ -374,7 +435,11 @@ export const app = express();
               const pairKey = `${center}___${batch}`;
               if (!seenCenterBatch.has(pairKey)) {
                 seenCenterBatch.add(pairKey);
-                batchesByCenter[center].push({ batch_code: batch, ae_name: ae || undefined });
+                batchesByCenter[center].push({ 
+                  batch_code: batch, 
+                  ae_name: ae || undefined,
+                  batch_status: status || undefined
+                });
                 totalBatches++;
               }
             }
@@ -1251,7 +1316,7 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
             const rows = await globalSql`
               SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
               FROM public.batch_students
-              WHERE center_code = ${centerCode} AND batch_code = ${batchCode} AND LOWER(batch_status) = 'running'
+              WHERE center_code = ${centerCode} AND batch_code = ${batchCode}
               ORDER BY created_at DESC;
             `;
             const result = rows.map(r => ({
@@ -1284,7 +1349,6 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
             .select('id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at')
             .eq('center_code', centerCode)
             .eq('batch_code', batchCode)
-            .ilike('batch_status', 'running')
             .order('created_at', { ascending: false });
           if (error) throw error;
           return res.json(data || []);
