@@ -17,12 +17,10 @@ import {
   Loader2,
   Mic,
   Video,
-  RefreshCcw,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Plus,
-  FileDown
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
@@ -884,25 +882,6 @@ export function Dashboard() {
                 {activeUsers.length}
               </span>
             </div>
-          </motion.button>
-          <a
-            href="/api/download-user-guide"
-            download="Validate_Pro_User_Guide_and_Feature_Overview.docx"
-            className="btn-secondary flex items-center gap-1.5 glass-card text-teal-700 border-teal-200 hover:bg-teal-50 shadow-sm hover:shadow transition-all text-xs font-bold py-2 px-3"
-            title="Download Word Document User Guide (.docx)"
-          >
-            <FileDown size={15} className="text-teal-600" />
-            <span className="hidden md:inline">User Guide (.docx)</span>
-          </a>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => window.dispatchEvent(new CustomEvent('reset_validation'))}
-            className="btn-secondary flex items-center gap-2 glass-card text-brand-primary border-brand-primary/20 hover:bg-brand-primary/5 shadow-sm hover:shadow transition-shadow duration-300"
-            title="Start New Validation / Clear Form"
-          >
-            <RefreshCcw size={16} />
-            <span className="hidden sm:inline">Start New</span>
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.02 }}

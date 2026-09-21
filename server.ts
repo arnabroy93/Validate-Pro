@@ -2589,7 +2589,8 @@ async function setupServer() {
 
   // Only listen to port if not running in Vercel. Vercel provides process.env.VERCEL
   if (!process.env.VERCEL) {
-    const PORT = Number(process.env.PORT) || 3000;
+    // Port 3000 is required by the infrastructure and nginx reverse proxy
+    const PORT = 3000;
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });

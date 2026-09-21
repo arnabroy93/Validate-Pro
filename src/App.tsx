@@ -19,7 +19,7 @@ import { Insights } from './components/Insights';
 import { FeatureControls } from './components/FeatureControls';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Settings, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload, PieChart, FileDown, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, LogOut, Loader2, FileText, RefreshCcw, BarChart3, Upload, PieChart } from 'lucide-react';
 import { cn, getAvatarUrl } from './utils';
 import { Background } from './components/Background';
 
@@ -297,18 +297,6 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
             )}
           </>
         )}
-
-        <div className="pt-3 select-none">
-          <a
-            href="/api/download-user-guide"
-            download="Validate_Pro_User_Guide_and_Feature_Overview.docx"
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-teal-700 bg-teal-50/80 hover:bg-teal-100/80 border border-teal-200/60 font-bold text-xs transition-all shadow-2xs group"
-            title="Download Word Document User Guide"
-          >
-            <FileDown size={16} className="text-teal-600 group-hover:scale-110 transition-transform shrink-0" />
-            <span className="truncate">User Guide (.docx)</span>
-          </a>
-        </div>
       </nav>
 
       <div className="p-4 border-t border-brand-border/30">
