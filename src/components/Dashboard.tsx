@@ -21,7 +21,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Plus
+  Plus,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
@@ -884,6 +885,15 @@ export function Dashboard() {
               </span>
             </div>
           </motion.button>
+          <a
+            href="/api/download-user-guide"
+            download="Validate_Pro_User_Guide_and_Feature_Overview.docx"
+            className="btn-secondary flex items-center gap-1.5 glass-card text-teal-700 border-teal-200 hover:bg-teal-50 shadow-sm hover:shadow transition-all text-xs font-bold py-2 px-3"
+            title="Download Word Document User Guide (.docx)"
+          >
+            <FileDown size={15} className="text-teal-600" />
+            <span className="hidden md:inline">User Guide (.docx)</span>
+          </a>
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

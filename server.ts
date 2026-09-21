@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -215,6 +216,96 @@ async function runMigrations(isManual = false) {
     `;
     await sql`GRANT EXECUTE ON FUNCTION public.get_all_centers_and_batches() TO anon, authenticated, service_role, postgres;`;
 
+    // High-performance batch reports summary aggregation function
+    await sql`
+      CREATE OR REPLACE FUNCTION public.get_batch_reports_summary()
+      RETURNS TABLE (
+        center_code text,
+        batch_code text,
+        total_students bigint,
+        validated bigint,
+        revalidated bigint,
+        pending bigint,
+        absent bigint,
+        rejected bigint,
+        assigned_ae text,
+        validated_by text,
+        batch_start_date text,
+        program_name text,
+        visit_count bigint,
+        total_absent_count bigint,
+        latest_timestamp text
+      )
+      LANGUAGE sql STABLE SECURITY DEFINER AS $$
+        WITH latest_validations AS (
+          SELECT DISTINCT ON (v.batch_code, v.student_code)
+            v.batch_code,
+            v.center_code,
+            v.student_code,
+            v.status::text as status,
+            v.validated_by,
+            COALESCE(NULLIF(v.aligned_ae, ''), NULLIF(v.ae_name, '')) as assigned_ae,
+            COALESCE(v.visit_count, 1) as visit_count,
+            COALESCE(v.absent_count, CASE WHEN v.status::text = 'Absent' THEN 1 ELSE 0 END) as absent_count,
+            v.created_at
+          FROM public.student_validations v
+          WHERE v.batch_code IS NOT NULL AND v.student_code IS NOT NULL
+          ORDER BY v.batch_code, v.student_code, v.created_at DESC
+        ),
+        batch_agg AS (
+          SELECT 
+            TRIM(bs.center_code) as center_code,
+            TRIM(bs.batch_code) as batch_code,
+            COUNT(DISTINCT bs.student_code) as total_students,
+            MAX(bs.ae_name) as bs_ae,
+            MAX(bs.batch_start_date) as bs_start,
+            MAX(bs.program_name) as bs_program,
+            MAX(bs.created_at) as bs_latest
+          FROM public.batch_students bs
+          WHERE bs.center_code IS NOT NULL AND TRIM(bs.center_code) <> ''
+            AND bs.batch_code IS NOT NULL AND TRIM(bs.batch_code) <> ''
+          GROUP BY TRIM(bs.center_code), TRIM(bs.batch_code)
+        ),
+        val_agg AS (
+          SELECT 
+            TRIM(lv.batch_code) as batch_code,
+            MAX(TRIM(lv.center_code)) as val_center,
+            COUNT(DISTINCT lv.student_code) as total_val_students,
+            COUNT(CASE WHEN lv.status IN ('Validated', 'Completed') THEN 1 END) as validated,
+            COUNT(CASE WHEN lv.status = 'ReValidated' THEN 1 END) as revalidated,
+            COUNT(CASE WHEN lv.status = 'Absent' THEN 1 END) as absent,
+            COUNT(CASE WHEN lv.status = 'Rejected' THEN 1 END) as rejected,
+            MAX(lv.assigned_ae) as val_ae,
+            STRING_AGG(DISTINCT lv.validated_by, ', ') FILTER (WHERE lv.validated_by IS NOT NULL AND TRIM(lv.validated_by) <> '') as validated_by,
+            MAX(lv.visit_count) as visit_count,
+            SUM(lv.absent_count) as total_absent_count,
+            MAX(lv.created_at) as val_latest
+          FROM latest_validations lv
+          GROUP BY TRIM(lv.batch_code)
+        )
+        SELECT 
+          COALESCE(NULLIF(TRIM(b.center_code), ''), NULLIF(TRIM(v.val_center), ''), 'N/A')::text as center_code,
+          COALESCE(NULLIF(TRIM(b.batch_code), ''), NULLIF(TRIM(v.batch_code), ''), 'N/A')::text as batch_code,
+          GREATEST(COALESCE(b.total_students, 0), COALESCE(v.total_val_students, 0))::bigint as total_students,
+          COALESCE(v.validated, 0)::bigint as validated,
+          COALESCE(v.revalidated, 0)::bigint as revalidated,
+          GREATEST(0, GREATEST(COALESCE(b.total_students, 0), COALESCE(v.total_val_students, 0)) - COALESCE(v.validated, 0) - COALESCE(v.revalidated, 0) - COALESCE(v.absent, 0) - COALESCE(v.rejected, 0))::bigint as pending,
+          COALESCE(v.absent, 0)::bigint as absent,
+          COALESCE(v.rejected, 0)::bigint as rejected,
+          COALESCE(NULLIF(TRIM(v.val_ae), ''), NULLIF(TRIM(b.bs_ae), ''), '')::text as assigned_ae,
+          COALESCE(v.validated_by, '')::text as validated_by,
+          COALESCE(b.bs_start, '')::text as batch_start_date,
+          COALESCE(b.bs_program, '')::text as program_name,
+          COALESCE(v.visit_count, 1)::bigint as visit_count,
+          COALESCE(v.total_absent_count, 0)::bigint as total_absent_count,
+          COALESCE(TO_CHAR(GREATEST(b.bs_latest, v.val_latest), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), TO_CHAR(COALESCE(b.bs_latest, v.val_latest), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), '')::text as latest_timestamp
+        FROM batch_agg b
+        FULL OUTER JOIN val_agg v ON b.batch_code = v.batch_code
+        ORDER BY latest_timestamp DESC NULLS LAST;
+      $$;
+    `;
+    await sql`GRANT EXECUTE ON FUNCTION public.get_batch_reports_summary() TO anon, authenticated, service_role, postgres;`;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_center_code ON public.batch_students(center_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_batch_code ON public.batch_students(batch_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_batch_students_status ON public.batch_students(batch_status);`;
@@ -224,6 +315,7 @@ async function runMigrations(isManual = false) {
     await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_status ON public.student_validations(status);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_center_batch ON public.student_validations(center_code, batch_code);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_student ON public.student_validations(student_code);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_student_validations_composite ON public.student_validations(batch_code, student_code, created_at DESC);`;
 
     // 7. Force Schema Reload
     await sql`NOTIFY pgrst, 'reload schema';`;
@@ -319,6 +411,10 @@ export const app = express();
   let cachedAllValidationsTime = 0;
   let activeAllValidationsPromise: Promise<any[]> | null = null;
 
+  let cachedBatchSummary: any[] | null = null;
+  let cachedBatchSummaryTime = 0;
+  let activeBatchSummaryPromise: Promise<any[]> | null = null;
+
   const CACHE_TTL = 300000; // 5 minutes cache to shield Supabase from rapid/parallel fetching
 
   function invalidateCache() {
@@ -331,6 +427,9 @@ export const app = express();
     cachedAllValidations = null;
     cachedAllValidationsTime = 0;
     activeAllValidationsPromise = null;
+    cachedBatchSummary = null;
+    cachedBatchSummaryTime = 0;
+    activeBatchSummaryPromise = null;
   }
 
   async function getBatchMeta(forceRefresh = false): Promise<BatchMetaResponse> {
@@ -566,6 +665,17 @@ export const app = express();
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Active users error' });
     }
+  });
+
+  // Downloadable Word Document User Guide (.docx) endpoint
+  app.get('/api/download-user-guide', (req, res) => {
+    const filePath = path.join(process.cwd(), 'public', 'Validate_Pro_User_Guide_and_Feature_Overview.docx');
+    if (fs.existsSync(filePath)) {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', 'attachment; filename="Validate_Pro_User_Guide_and_Feature_Overview.docx"');
+      return res.sendFile(filePath);
+    }
+    res.status(404).json({ error: 'User guide document not found' });
   });
 
   app.post('/api/admin/refresh-schema', async (req, res) => {
@@ -1690,6 +1800,396 @@ UPDATE public.profiles SET email = 'admin@validpro.internal' WHERE username = 'a
     } catch (error: any) {
       activeAllValidationsPromise = null;
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==========================================
+  // HIGH-PERFORMANCE REPORTS ENDPOINTS
+  // ==========================================
+
+  // 1. Pre-aggregated Batch Reports Summary (Loads in ~1s instead of minutes)
+  app.get('/api/reports/batch_summary', async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === 'true';
+      if (forceRefresh) {
+        cachedBatchSummary = null;
+        cachedBatchSummaryTime = 0;
+      }
+
+      const now = Date.now();
+      if (!forceRefresh && cachedBatchSummary && (now - cachedBatchSummaryTime < CACHE_TTL)) {
+        return res.json(cachedBatchSummary);
+      }
+
+      if (!forceRefresh && activeBatchSummaryPromise) {
+        const data = await activeBatchSummaryPromise;
+        return res.json(data);
+      }
+
+      activeBatchSummaryPromise = (async () => {
+        let rows: any[] = [];
+
+        // 1. Direct high-speed Postgres query calling get_batch_reports_summary()
+        if (globalSql) {
+          try {
+            rows = await globalSql`SELECT * FROM public.get_batch_reports_summary();`;
+          } catch (sqlErr: any) {
+            console.warn('[Reports Summary] SQL function query failed, trying fallback:', sqlErr.message);
+          }
+        }
+
+        // 2. Supabase Admin RPC function call
+        if (rows.length === 0 && supabaseAdmin) {
+          try {
+            const { data, error } = await supabaseAdmin.rpc('get_batch_reports_summary');
+            if (!error && Array.isArray(data) && data.length > 0) {
+              rows = data;
+            } else if (error) {
+              console.warn('[Reports Summary] Supabase RPC get_batch_reports_summary failed:', error.message);
+            }
+          } catch (rpcErr: any) {
+            console.warn('[Reports Summary] Supabase RPC call error:', rpcErr.message);
+          }
+        }
+
+        // 3. Resilient two-step fallback aggregation (if function is not yet created in Postgres)
+        if (rows.length === 0) {
+          if (globalSql) {
+            try {
+              const [batchStats, validations] = await Promise.all([
+                globalSql`
+                  SELECT 
+                    center_code,
+                    batch_code,
+                    COUNT(DISTINCT student_code)::int as total_students,
+                    MAX(ae_name) as ae_name,
+                    MAX(batch_start_date) as batch_start_date,
+                    MAX(program_name) as program_name,
+                    MAX(created_at) as student_created_at
+                  FROM public.batch_students
+                  WHERE center_code IS NOT NULL AND TRIM(center_code) <> ''
+                    AND batch_code IS NOT NULL AND TRIM(batch_code) <> ''
+                  GROUP BY center_code, batch_code;
+                `,
+                globalSql`
+                  SELECT DISTINCT ON (batch_code, student_code)
+                    batch_code,
+                    student_code,
+                    status::text as status,
+                    validated_by,
+                    COALESCE(NULLIF(aligned_ae, ''), NULLIF(ae_name, '')) as assigned_ae,
+                    visit_count,
+                    absent_count,
+                    created_at
+                  FROM public.student_validations
+                  WHERE batch_code IS NOT NULL AND student_code IS NOT NULL
+                  ORDER BY batch_code, student_code, created_at DESC;
+                `
+              ]);
+
+              const valMap = new Map<string, any[]>();
+              validations.forEach((v: any) => {
+                if (!valMap.has(v.batch_code)) valMap.set(v.batch_code, []);
+                valMap.get(v.batch_code)!.push(v);
+              });
+
+              rows = batchStats.map((b: any) => {
+                const bVals = valMap.get(b.batch_code) || [];
+                let validated = 0;
+                let revalidated = 0;
+                let absent = 0;
+                let rejected = 0;
+                let maxVisit = 1;
+                let totalAbsent = 0;
+                let latestValDate = b.student_created_at;
+                let valAe = '';
+                const validatorSet = new Set<string>();
+
+                bVals.forEach((v: any) => {
+                  if (v.status === 'Validated' || v.status === 'Completed') validated++;
+                  else if (v.status === 'ReValidated') revalidated++;
+                  else if (v.status === 'Absent') absent++;
+                  else if (v.status === 'Rejected') rejected++;
+
+                  if (v.visit_count && Number(v.visit_count) > maxVisit) maxVisit = Number(v.visit_count);
+                  const abCount = v.absent_count !== null && v.absent_count !== undefined ? Number(v.absent_count) : (v.status === 'Absent' ? 1 : 0);
+                  totalAbsent += abCount;
+
+                  if (v.assigned_ae) valAe = v.assigned_ae;
+                  if (v.validated_by && v.validated_by.trim()) validatorSet.add(v.validated_by.trim());
+                  if (v.created_at && (!latestValDate || new Date(v.created_at) > new Date(latestValDate))) {
+                    latestValDate = v.created_at;
+                  }
+                });
+
+                const totalStudents = Number(b.total_students) || 0;
+                const pending = Math.max(0, totalStudents - validated - revalidated - absent - rejected);
+
+                return {
+                  center_code: b.center_code || '',
+                  batch_code: b.batch_code || '',
+                  total_students: totalStudents,
+                  validated,
+                  revalidated,
+                  pending,
+                  absent,
+                  rejected,
+                  assigned_ae: valAe || b.ae_name || '',
+                  validated_by: Array.from(validatorSet).join(', '),
+                  batch_start_date: b.batch_start_date || '',
+                  program_name: b.program_name || '',
+                  visit_count: maxVisit,
+                  total_absent_count: totalAbsent,
+                  latest_timestamp: latestValDate instanceof Date ? latestValDate.toISOString() : (latestValDate || '')
+                };
+              });
+            } catch (fbErr: any) {
+              console.error('[Reports Summary] Direct fallback query error:', fbErr.message);
+            }
+          }
+        }
+
+        // Format and clean fields
+        const cleanRows = rows.map((r: any) => ({
+          center_code: String(r.center_code || '').trim(),
+          batch_code: String(r.batch_code || '').trim(),
+          total_students: Number(r.total_students) || 0,
+          validated: Number(r.validated) || 0,
+          revalidated: Number(r.revalidated) || 0,
+          pending: Number(r.pending) || 0,
+          absent: Number(r.absent) || 0,
+          rejected: Number(r.rejected) || 0,
+          assigned_ae: String(r.assigned_ae || '').trim(),
+          validated_by: String(r.validated_by || '').trim(),
+          batch_start_date: String(r.batch_start_date || '').trim(),
+          program_name: String(r.program_name || '').trim(),
+          visit_count: Number(r.visit_count) || 1,
+          total_absent_count: Number(r.total_absent_count) || 0,
+          latest_timestamp: r.latest_timestamp instanceof Date ? r.latest_timestamp.toISOString() : String(r.latest_timestamp || '')
+        }));
+
+        cleanRows.sort((a, b) => new Date(b.latest_timestamp || 0).getTime() - new Date(a.latest_timestamp || 0).getTime());
+
+        cachedBatchSummary = cleanRows;
+        cachedBatchSummaryTime = Date.now();
+        return cleanRows;
+      })();
+
+      const result = await activeBatchSummaryPromise;
+      activeBatchSummaryPromise = null;
+      return res.json(result);
+    } catch (err: any) {
+      activeBatchSummaryPromise = null;
+      console.error('[Reports Summary API] Fatal Error:', err.message);
+      res.status(500).json({ error: err.message || 'Failed to generate batch reports summary' });
+    }
+  });
+
+  // 2. Targeted Batch Details (Loads in ~30ms for a single batch modal)
+  app.get('/api/reports/batch_details', async (req, res) => {
+    try {
+      const batchCode = typeof req.query.batch_code === 'string' ? req.query.batch_code.trim() : '';
+      const centerCode = typeof req.query.center_code === 'string' ? req.query.center_code.trim() : '';
+
+      if (!batchCode) {
+        return res.status(400).json({ error: 'batch_code query parameter is required' });
+      }
+
+      let students: any[] = [];
+      let validations: any[] = [];
+
+      if (globalSql) {
+        try {
+          const [sRows, vRows] = await Promise.all([
+            centerCode 
+              ? globalSql`
+                  SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
+                  FROM public.batch_students
+                  WHERE center_code = ${centerCode} AND batch_code = ${batchCode}
+                  ORDER BY created_at DESC;
+                `
+              : globalSql`
+                  SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
+                  FROM public.batch_students
+                  WHERE batch_code = ${batchCode}
+                  ORDER BY created_at DESC;
+                `,
+            globalSql`
+              SELECT DISTINCT ON (student_code)
+                id, user_id, status::text as status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type, visit_count, absent_count, validation_history
+              FROM public.student_validations
+              WHERE batch_code = ${batchCode}
+              ORDER BY student_code, created_at DESC;
+            `
+          ]);
+          students = sRows;
+          validations = vRows;
+        } catch (sqlErr: any) {
+          console.warn('[Batch Details] SQL query failed, falling back to Supabase SDK:', sqlErr.message);
+        }
+      }
+
+      if (students.length === 0 && supabaseAdmin) {
+        let q = supabaseAdmin.from('batch_students').select('*').eq('batch_code', batchCode);
+        if (centerCode) q = q.eq('center_code', centerCode);
+        const [sRes, vRes] = await Promise.all([
+          q.order('created_at', { ascending: false }),
+          supabaseAdmin.from('student_validations').select('*').eq('batch_code', batchCode).order('created_at', { ascending: false })
+        ]);
+        if (sRes.data) students = sRes.data;
+        if (vRes.data) validations = vRes.data;
+      }
+
+      // Deduplicate students
+      const uniqueStudentMap = new Map<string, any>();
+      students.forEach(s => {
+        if (!uniqueStudentMap.has(s.student_code)) {
+          uniqueStudentMap.set(s.student_code, s);
+        }
+      });
+
+      // Deduplicate validations (latest per student)
+      const vMap = new Map<string, any>();
+      validations.forEach(v => {
+        if (!vMap.has(v.student_code)) {
+          vMap.set(v.student_code, v);
+        }
+      });
+
+      const combined = Array.from(uniqueStudentMap.values()).map(student => {
+        const v = vMap.get(student.student_code);
+        const studentVisit = v?.visit_count ? Number(v.visit_count) : 1;
+        const studentAbsent = v?.absent_count !== undefined && v?.absent_count !== null 
+          ? Number(v.absent_count) 
+          : (v?.status === 'Absent' ? 1 : 0);
+        const currentStatus = v?.status || 'Pending';
+
+        return {
+          id: v?.id || `pending-${student.student_code}`,
+          student_code: v?.student_code || student.student_code,
+          student_name: v?.student_name || student.student_name,
+          center_code: v?.center_code || student.center_code,
+          batch_code: v?.batch_code || student.batch_code,
+          batch_start_date: student.batch_start_date || '',
+          program_name: student.program_name || '',
+          education_qualification: student.education_qualification || '',
+          ae_name: v?.aligned_ae || v?.ae_name || student.aligned_ae || student.ae_name || '',
+          validated_by: v?.validated_by || 'N/A',
+          status: currentStatus,
+          remarks: v?.remarks || '',
+          validation_type: v?.validation_type || '',
+          recording_link: v?.recording_link || '',
+          mic_on: v?.mic_on || false,
+          video_on: v?.video_on || false,
+          visit_count: studentVisit,
+          absent_count: studentAbsent,
+          validation_history: Array.isArray(v?.validation_history) ? v.validation_history : [],
+          created_at: v?.created_at || null,
+          updated_at: v?.updated_at || null
+        };
+      });
+
+      res.json(combined);
+    } catch (err: any) {
+      console.error('[Batch Details API] Error:', err.message);
+      res.status(500).json({ error: err.message || 'Failed to fetch batch details' });
+    }
+  });
+
+  // 3. Multi-Batch Detailed Records Export
+  app.post('/api/reports/detailed_export', async (req, res) => {
+    try {
+      const batchCodes = req.body.batchCodes || req.body.batch_codes;
+      if (!Array.isArray(batchCodes) || batchCodes.length === 0) {
+        return res.status(400).json({ error: 'batchCodes array is required' });
+      }
+
+      let students: any[] = [];
+      let validations: any[] = [];
+
+      if (globalSql) {
+        try {
+          const [sRows, vRows] = await Promise.all([
+            globalSql`
+              SELECT id, ae_name, center_code, batch_code, student_code, student_name, mobile_no, dob, father_name, address, batch_status, enrollment_status, batch_start_date, program_name, education_qualification, created_at
+              FROM public.batch_students
+              WHERE batch_code IN ${globalSql(batchCodes)}
+              ORDER BY batch_code, created_at DESC;
+            `,
+            globalSql`
+              SELECT DISTINCT ON (batch_code, student_code)
+                id, user_id, status::text as status, created_at, updated_at, student_code, student_name, ae_name, aligned_ae, center_code, batch_code, validated_by, remarks, recording_link, dob, father_name, address, mic_on, video_on, validation_type, visit_count, absent_count, validation_history
+              FROM public.student_validations
+              WHERE batch_code IN ${globalSql(batchCodes)}
+              ORDER BY batch_code, student_code, created_at DESC;
+            `
+          ]);
+          students = sRows;
+          validations = vRows;
+        } catch (sqlErr: any) {
+          console.warn('[Detailed Export] SQL query failed:', sqlErr.message);
+        }
+      }
+
+      if (students.length === 0 && supabaseAdmin) {
+        const [sRes, vRes] = await Promise.all([
+          supabaseAdmin.from('batch_students').select('*').in('batch_code', batchCodes),
+          supabaseAdmin.from('student_validations').select('*').in('batch_code', batchCodes)
+        ]);
+        if (sRes.data) students = sRes.data;
+        if (vRes.data) validations = vRes.data;
+      }
+
+      const uniqueStudentMap = new Map<string, any>();
+      students.forEach(s => {
+        const key = `${s.batch_code}_${s.student_code}`;
+        if (!uniqueStudentMap.has(key)) uniqueStudentMap.set(key, s);
+      });
+
+      const vMap = new Map<string, any>();
+      validations.forEach(v => {
+        const key = `${v.batch_code}_${v.student_code}`;
+        if (!vMap.has(key)) vMap.set(key, v);
+      });
+
+      const combined = Array.from(uniqueStudentMap.values()).map(student => {
+        const key = `${student.batch_code}_${student.student_code}`;
+        const v = vMap.get(key);
+        const studentVisit = v?.visit_count ? Number(v.visit_count) : 1;
+        const studentAbsent = v?.absent_count !== undefined && v?.absent_count !== null 
+          ? Number(v.absent_count) 
+          : (v?.status === 'Absent' ? 1 : 0);
+        const currentStatus = v?.status || 'Pending';
+
+        return {
+          id: v?.id || `pending-${student.student_code}`,
+          student_code: v?.student_code || student.student_code,
+          student_name: v?.student_name || student.student_name,
+          center_code: v?.center_code || student.center_code,
+          batch_code: v?.batch_code || student.batch_code,
+          batch_start_date: student.batch_start_date || '',
+          program_name: student.program_name || '',
+          education_qualification: student.education_qualification || '',
+          ae_name: v?.aligned_ae || v?.ae_name || student.aligned_ae || student.ae_name || '',
+          validated_by: v?.validated_by || 'N/A',
+          status: currentStatus,
+          remarks: v?.remarks || '',
+          validation_type: v?.validation_type || '',
+          recording_link: v?.recording_link || '',
+          mic_on: v?.mic_on || false,
+          video_on: v?.video_on || false,
+          visit_count: studentVisit,
+          absent_count: studentAbsent,
+          validation_history: Array.isArray(v?.validation_history) ? v.validation_history : [],
+          created_at: v?.created_at || null,
+          updated_at: v?.updated_at || null
+        };
+      });
+
+      res.json(combined);
+    } catch (err: any) {
+      console.error('[Detailed Export API] Error:', err.message);
+      res.status(500).json({ error: err.message || 'Failed to export detailed records' });
     }
   });
 

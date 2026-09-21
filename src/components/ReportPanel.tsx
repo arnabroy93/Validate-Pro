@@ -52,7 +52,6 @@ const calculateDaysSince = (startDateStr: string) => {
 };
 
 export function ReportPanel() {
-  const [validations, setValidations] = useState<StudentValidation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -61,6 +60,10 @@ export function ReportPanel() {
   const [summaryData, setSummaryData] = useState<BatchSummary[]>([]);
   
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [selectedBatchDetails, setSelectedBatchDetails] = useState<any[]>([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [exportingDetails, setExportingDetails] = useState(false);
+
   const [selectedBatchesForExport, setSelectedBatchesForExport] = useState<Set<string>>(new Set());
   const [historyModalStudent, setHistoryModalStudent] = useState<any | null>(null);
 
@@ -68,164 +71,49 @@ export function ReportPanel() {
     fetchData();
   }, []);
 
-  const fetchAllTableData = async (tableName: string) => {
-    let allData: any[] = [];
-    let from = 0;
-    let limit = 1000;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .range(from, from + limit - 1);
-      
-      if (error) throw error;
-      if (data && data.length > 0) {
-        allData = [...allData, ...data];
-        from += limit;
-        if (data.length < limit) hasMore = false;
-      } else {
-        hasMore = false;
-      }
-    }
-    return allData;
-  };
-
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const [vDataRes, bDataRes] = await Promise.all([
-        fetch('/api/admin/all_validations'),
-        fetch('/api/batch_data')
-      ]);
-      
-      const vData = (vDataRes.ok && vDataRes.headers.get('content-type')?.includes('application/json')) 
-        ? await vDataRes.json() 
-        : await fetchAllTableData('student_validations');
-        
-      const bData = (bDataRes.ok && bDataRes.headers.get('content-type')?.includes('application/json')) 
-        ? await bDataRes.json() 
-        : await fetchAllTableData('batch_students');
-      
-      
-      // 1. Deduplicate batch students from excel
-      const uniqueStudentsMap = new Map<string, any>();
-      bData.forEach((s: any) => {
-        const key = `${s.center_code}_${s.batch_code}_${s.student_code}`;
-        // Since we ordered desc by created_at, the first one encountered is the latest
-        if (!uniqueStudentsMap.has(key)) {
-          uniqueStudentsMap.set(key, s);
+      const res = await fetch(`/api/reports/batch_summary${forceRefresh ? '?refresh=true' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSummaryData(data);
+          if (forceRefresh) {
+            toast.success('Reports updated with latest data');
+          }
+          return;
         }
-      });
-      
-      const vDataMap = new Map<string, any>();
-      vData.forEach((v: any) => {
-        const key = `${v.batch_code}_${v.student_code}`;
-        // Prioritize latest validation (already ordered desc in API)
-        if (!vDataMap.has(key)) {
-          vDataMap.set(key, v);
-        }
-      });
+      }
 
-      // 2. Build full combined validation data for "View Details"
-      const combinedValidations: any[] = [];
-      
-      // Calculate Summary
-      const summaryMap = new Map<string, BatchSummary & { validatorSet: Set<string> }>();
-      
-      uniqueStudentsMap.forEach((student: any) => {
-        const sumKey = `${student.center_code}_${student.batch_code}`;
-        if (!summaryMap.has(sumKey)) {
-          summaryMap.set(sumKey, {
-            center_code: student.center_code || '',
-            batch_code: student.batch_code || '',
-            total_students: 0,
-            validated: 0,
-            revalidated: 0,
-            pending: 0,
-            absent: 0,
-            rejected: 0,
-            latest_timestamp: student.created_at || '',
-            assigned_ae: student.ae_name || '',
-            validated_by: '',
-            batch_start_date: student.batch_start_date || '',
-            program_name: student.program_name || '',
-            visit_count: 1,
-            total_absent_count: 0,
-            validatorSet: new Set()
-          });
-        }
-        
-        const summary = summaryMap.get(sumKey)!;
-        summary.total_students += 1;
-        
-        const validationRow = vDataMap.get(`${student.batch_code}_${student.student_code}`);
-        const studentVisit = validationRow?.visit_count ? Number(validationRow.visit_count) : 1;
-        const studentAbsent = validationRow?.absent_count !== undefined && validationRow?.absent_count !== null 
-          ? Number(validationRow.absent_count) 
-          : (validationRow?.status === 'Absent' ? 1 : 0);
-
-        if (studentVisit > (summary.visit_count || 1)) {
-          summary.visit_count = studentVisit;
-        }
-        summary.total_absent_count = (summary.total_absent_count || 0) + studentAbsent;
-
-        if (validationRow?.aligned_ae || validationRow?.ae_name) {
-          summary.assigned_ae = validationRow.aligned_ae || validationRow.ae_name || summary.assigned_ae;
-        }
-        
-        if (validationRow?.validated_by) {
-          summary.validatorSet.add(validationRow.validated_by);
-          summary.validated_by = Array.from(summary.validatorSet).join(', ');
-        }
-        
-        const currentStatus = validationRow?.status || 'Pending';
-        
-        if (currentStatus === 'Validated' || currentStatus === 'Completed') summary.validated += 1;
-        else if (currentStatus === 'ReValidated') summary.revalidated += 1;
-        else if (currentStatus === 'Absent') summary.absent += 1;
-        else if (currentStatus === 'Rejected') summary.rejected += 1;
-        else summary.pending += 1; // Default to Pending
-        
-        if (validationRow?.created_at && new Date(validationRow.created_at) > new Date(summary.latest_timestamp)) {
-            summary.latest_timestamp = validationRow.created_at;
-        }
-
-        combinedValidations.push({
-            id: validationRow?.id || `pending-${student.student_code}`,
-            student_code: validationRow?.student_code || student.student_code,
-            student_name: validationRow?.student_name || student.student_name,
-            center_code: validationRow?.center_code || student.center_code,
-            batch_code: validationRow?.batch_code || student.batch_code,
-            batch_start_date: student.batch_start_date || '',
-            program_name: student.program_name || '',
-            education_qualification: student.education_qualification || '',
-            ae_name: validationRow?.aligned_ae || validationRow?.ae_name || student.aligned_ae || student.ae_name || '',
-            validated_by: validationRow?.validated_by || 'N/A',
-            status: currentStatus,
-            remarks: validationRow?.remarks || '',
-            validation_type: validationRow?.validation_type || '',
-            recording_link: validationRow?.recording_link || '',
-            mic_on: validationRow?.mic_on || false,
-            video_on: validationRow?.video_on || false,
-            visit_count: studentVisit,
-            absent_count: studentAbsent,
-            validation_history: Array.isArray(validationRow?.validation_history) ? validationRow.validation_history : [],
-            created_at: validationRow?.created_at || null,
-            updated_at: validationRow?.updated_at || null
-        });
-      });
-      
-      setValidations(combinedValidations);
-      setSummaryData(Array.from(summaryMap.values()).sort((a, b) => new Date(b.latest_timestamp || 0).getTime() - new Date(a.latest_timestamp || 0).getTime()));
-
+      // Fallback in case of server error
+      const fallbackRes = await fetch('/api/batch_data');
+      if (fallbackRes.ok) {
+        const bData = await fallbackRes.json();
+        toast('Loaded using fallback connection');
+      }
     } catch (error: any) {
-      toast.error('Error fetching data');
-      console.error(error);
+      toast.error('Error loading reports summary');
+      console.error('Error fetching reports summary:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openBatchDetails = async (batchCode: string, centerCode?: string) => {
+    setSelectedBatch(batchCode);
+    setDetailsLoading(true);
+    setSelectedBatchDetails([]);
+    try {
+      const res = await fetch(`/api/reports/batch_details?batch_code=${encodeURIComponent(batchCode)}${centerCode ? `&center_code=${encodeURIComponent(centerCode)}` : ''}`);
+      if (!res.ok) throw new Error('Failed to fetch batch details');
+      const data = await res.json();
+      setSelectedBatchDetails(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('Error loading batch details:', err);
+      toast.error('Failed to load student verification details');
+    } finally {
+      setDetailsLoading(false);
     }
   };
 
@@ -306,7 +194,10 @@ export function ReportPanel() {
     const users = new Set<string>();
     summaryData.forEach(s => {
       if (s.validated_by) {
-        users.add(s.validated_by);
+        s.validated_by.split(',').forEach(u => {
+          const trimmed = u.trim();
+          if (trimmed) users.add(trimmed);
+        });
       }
     });
     return Array.from(users).sort();
@@ -319,7 +210,7 @@ export function ReportPanel() {
     if (!matchesSearch) return false;
     
     if (programFilter !== 'All' && s.program_name !== programFilter) return false;
-    if (validatedByFilter !== 'All' && s.validated_by !== validatedByFilter) return false;
+    if (validatedByFilter !== 'All' && (!s.validated_by || !s.validated_by.toLowerCase().includes(validatedByFilter.toLowerCase()))) return false;
 
     if (statusFilter === 'All') return true;
     if (statusFilter === 'Validated') return s.validated > 0;
@@ -331,9 +222,32 @@ export function ReportPanel() {
     return true;
   });
 
-  const selectedBatchData = selectedBatch 
-    ? validations.filter(v => v.batch_code === selectedBatch)
-    : [];
+  const selectedBatchData = selectedBatchDetails;
+
+  const handleExportSelectedBatchesDetailedExcel = async () => {
+    if (selectedBatchesForExport.size === 0) {
+      toast.error('Please select at least one batch to export');
+      return;
+    }
+    setExportingDetails(true);
+    const toastId = toast.loading(`Preparing detailed records for ${selectedBatchesForExport.size} batches...`);
+    try {
+      const res = await fetch('/api/reports/detailed_export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchCodes: Array.from(selectedBatchesForExport) })
+      });
+      if (!res.ok) throw new Error('Failed to fetch detailed records');
+      const records = await res.json();
+      handleExportExcel(records, `Student_Audit_Logs_${selectedBatchesForExport.size}_Batches`);
+      toast.success(`Exported ${records.length} student records successfully!`, { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Failed to export detailed audit records', { id: toastId });
+    } finally {
+      setExportingDetails(false);
+    }
+  };
 
   const handleExportSummaryExcel = () => {
     if (selectedBatchesForExport.size === 0) {
@@ -499,7 +413,7 @@ export function ReportPanel() {
               ))}
             </select>
           </div>
-          <div className="flex gap-2 w-full md:w-auto items-center">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto items-center">
             {selectedBatchesForExport.size > 0 && (
               <>
                 <span className="text-sm font-bold text-slate-500 mr-2 border-r border-slate-300 pr-4">
@@ -514,10 +428,23 @@ export function ReportPanel() {
                 <button onClick={handleExportSummaryPDF} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-100">
                   <Download size={14} /> PDF
                 </button>
+                <button 
+                  onClick={handleExportSelectedBatchesDetailedExcel}
+                  disabled={exportingDetails}
+                  className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-teal-500/10 text-teal-700 border-teal-500/30 hover:bg-teal-100 font-bold disabled:opacity-50"
+                  title="Export all individual student verification records for selected batches"
+                >
+                  {exportingDetails ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  Student Audit Log ({selectedBatchesForExport.size})
+                </button>
               </>
             )}
-            <button onClick={fetchData} className="p-3 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm ml-2">
-              <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+            <button 
+              onClick={() => fetchData(true)} 
+              className="p-3 glass-card text-brand-hover rounded-2xl border border-brand-border hover:bg-brand-muted transition-colors shadow-sm ml-2"
+              title="Refresh Reports (Force sync with server)"
+            >
+              <RefreshCcw size={16} className={loading ? 'animate-spin text-teal-600' : ''} />
             </button>
           </div>
         </div>
@@ -619,8 +546,8 @@ export function ReportPanel() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap sticky right-0 glass-card shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
                          <button 
-                           onClick={() => setSelectedBatch(s.batch_code)}
-                           className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"
+                           onClick={() => openBatchDetails(s.batch_code, s.center_code)}
+                           className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1 hover:bg-slate-100"
                          >
                            <Eye size={14} /> View Details
                          </button>
@@ -632,7 +559,7 @@ export function ReportPanel() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
-                    <td colSpan={13} className="px-8 py-20 text-center">
+                    <td colSpan={17} className="px-8 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <Search size={48} className="text-slate-200" />
                         <p className="text-slate-400 font-bold">No reports matched your criteria.</p>
@@ -665,21 +592,38 @@ export function ReportPanel() {
               <div className="p-6 border-b border-brand-border glass-card flex justify-between items-center shrink-0">
                 <div>
                   <h2 className="text-xl font-bold text-brand-text">Detailed Report: {selectedBatch}</h2>
-                  <p className="text-xs text-slate-500 font-medium mt-1">Found {selectedBatchData.length} records</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    {detailsLoading ? 'Loading records...' : `Found ${selectedBatchData.length} records`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => handleExportCSV(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-100">
+                  <button 
+                    disabled={detailsLoading || selectedBatchData.length === 0}
+                    onClick={() => handleExportCSV(selectedBatchData, `Batch_${selectedBatch}`)} 
+                    className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-100 disabled:opacity-50"
+                  >
                     <TableIcon size={14} /> CSV
                   </button>
-                  <button onClick={() => handleExportExcel(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-100">
+                  <button 
+                    disabled={detailsLoading || selectedBatchData.length === 0}
+                    onClick={() => handleExportExcel(selectedBatchData, `Batch_${selectedBatch}`)} 
+                    className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-100 disabled:opacity-50"
+                  >
                     <TableIcon size={14} /> Excel
                   </button>
-                  <button onClick={() => handleExportPDF(selectedBatchData, `Batch_${selectedBatch}`)} className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-100">
+                  <button 
+                    disabled={detailsLoading || selectedBatchData.length === 0}
+                    onClick={() => handleExportPDF(selectedBatchData, `Batch_${selectedBatch}`)} 
+                    className="btn-secondary py-2 px-3 text-xs flex items-center gap-1 bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-100 disabled:opacity-50"
+                  >
                     <Download size={14} /> PDF
                   </button>
                   <div className="w-px h-6 bg-slate-200 mx-1"></div>
                   <button 
-                    onClick={() => setSelectedBatch(null)}
+                    onClick={() => {
+                      setSelectedBatch(null);
+                      setSelectedBatchDetails([]);
+                    }}
                     className="p-2 bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 rounded-xl transition-colors"
                   >
                     <X size={20} />
@@ -687,6 +631,12 @@ export function ReportPanel() {
                 </div>
               </div>
               <div className="flex-1 overflow-auto p-6 bg-brand-bg/50">
+                {detailsLoading ? (
+                  <div className="flex flex-col items-center justify-center p-20 gap-3">
+                    <Loader2 className="animate-spin text-teal-600" size={38} />
+                    <p className="text-sm font-semibold text-slate-600">Loading student verification records for {selectedBatch}...</p>
+                  </div>
+                ) : (
                 <div className="glass-card rounded-2xl shadow-lg border border-brand-border overflow-hidden">
                   <div className="overflow-auto max-h-[60vh] relative">
                     <table className="w-full text-left relative min-w-max">
@@ -831,6 +781,7 @@ export function ReportPanel() {
                   </table>
                   </div>
                 </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
