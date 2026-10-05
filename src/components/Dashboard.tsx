@@ -650,6 +650,36 @@ export function Dashboard() {
     toast.success(`Validation Visit #${nextVisit} started for ${selectedBatch}. Review statuses and click "Save Changes" to save records and history.`);
   };
 
+  const handleStudentNewVisit = (studentCode: string, studentName?: string) => {
+    const currentVal = validations[studentCode] || {};
+    const oldVisit = currentVal.visit_count !== undefined && currentVal.visit_count !== null
+      ? Number(currentVal.visit_count)
+      : currentBatchVisit;
+    const nextVisit = oldVisit + 1;
+
+    const oldStatus = currentVal.status || 'Pending';
+    const oldAbsentCount = currentVal.absent_count !== undefined && currentVal.absent_count !== null
+      ? Number(currentVal.absent_count)
+      : (oldStatus === 'Absent' ? 1 : 0);
+
+    let newAbsentCount = oldAbsentCount;
+    if (oldStatus === 'Absent') {
+      newAbsentCount = oldAbsentCount + 1;
+    }
+
+    setValidations(prev => ({
+      ...prev,
+      [studentCode]: {
+        ...prev[studentCode],
+        visit_count: nextVisit,
+        absent_count: newAbsentCount
+      }
+    }));
+
+    setDirtyStudents(prev => new Set(prev).add(studentCode));
+    toast.success(`Visit #${nextVisit} counted for ${studentName || studentCode}. Click "Save Changes" to persist.`);
+  };
+
   const handleCheckboxChange = (studentCode: string, field: 'status' | 'mic_on' | 'video_on', value: any) => {
     setDirtyStudents(prev => new Set(prev).add(studentCode));
     
@@ -1048,7 +1078,7 @@ export function Dashboard() {
                         className="px-2.5 py-1 text-xs font-bold bg-white text-teal-800 hover:bg-teal-50 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                         title="Start a new visit attempt for this batch and auto-update visit & absent counts"
                       >
-                        <Plus size={12} /> New Visit
+                        <Plus size={12} /> New Visit (For Full Batch)
                       </button>
                     </div>
                   </div>
@@ -1258,6 +1288,14 @@ export function Dashboard() {
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/10 text-blue-700 border border-blue-500/30">
                                     Visit #{v.visit_count || currentBatchVisit}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStudentNewVisit(student.student_code, student.student_name)}
+                                    className="px-2 py-0.5 text-[10px] font-bold bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-300 border border-teal-200 rounded-full shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                                    title={`Count a new validation visit specifically for ${student.student_name}`}
+                                  >
+                                    <Plus size={10} /> New Visit
+                                  </button>
                                 </div>
                               </div>
                               <div className="mt-1 space-y-0.5">

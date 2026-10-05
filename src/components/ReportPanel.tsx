@@ -37,6 +37,69 @@ interface BatchSummary {
   total_absent_count?: number;
 }
 
+interface StudentAttemptBreakdown {
+  totalAttempts: number;
+  validatedCount: number;
+  validatedAttempts: string;
+  revalidatedCount: number;
+  revalidatedAttempts: string;
+  absentCount: number;
+  absentAttempts: string;
+  rejectedCount: number;
+  rejectedAttempts: string;
+}
+
+const getStudentAttemptBreakdown = (v: any): StudentAttemptBreakdown => {
+  const history: any[] = Array.isArray(v.validation_history)
+    ? v.validation_history.filter((h: any) => h && h.validated_by && h.validated_by !== 'N/A' && h.remarks !== 'Initial state')
+    : [];
+
+  const validated: number[] = [];
+  const revalidated: number[] = [];
+  const absent: number[] = [];
+  const rejected: number[] = [];
+
+  if (history.length > 0) {
+    history.forEach((h: any, idx: number) => {
+      const attemptNum = Number(h.attempt_number) || (idx + 1);
+      const st = (h.status || '').toLowerCase().trim();
+      if (st === 'validated') validated.push(attemptNum);
+      else if (st === 'revalidated') revalidated.push(attemptNum);
+      else if (st === 'absent') absent.push(attemptNum);
+      else if (st === 'rejected') rejected.push(attemptNum);
+    });
+  } else if (v.status && v.status !== 'Pending') {
+    const attemptNum = 1;
+    const st = (v.status || '').toLowerCase().trim();
+    if (st === 'validated') validated.push(attemptNum);
+    else if (st === 'revalidated') revalidated.push(attemptNum);
+    else if (st === 'absent') absent.push(attemptNum);
+    else if (st === 'rejected') rejected.push(attemptNum);
+  }
+
+  const formatAttempts = (arr: number[]) => {
+    if (!arr || arr.length === 0) return '';
+    return arr.length === 1 ? `Attempt ${arr[0]}` : `Attempt ${arr.join(', ')}`;
+  };
+
+  const totalAttempts = history.length > 0 ? history.length : (v.status && v.status !== 'Pending' ? 1 : 0);
+  const computedAbsentCount = absent.length > 0 
+    ? absent.length 
+    : (v.absent_count !== undefined && v.absent_count !== null ? Number(v.absent_count) : (v.status === 'Absent' ? 1 : 0));
+
+  return {
+    totalAttempts,
+    validatedCount: validated.length,
+    validatedAttempts: formatAttempts(validated),
+    revalidatedCount: revalidated.length,
+    revalidatedAttempts: formatAttempts(revalidated),
+    absentCount: computedAbsentCount,
+    absentAttempts: formatAttempts(absent),
+    rejectedCount: rejected.length,
+    rejectedAttempts: formatAttempts(rejected)
+  };
+};
+
 const calculateDaysSince = (startDateStr: string) => {
   if (!startDateStr) return 'N/A';
   const start = new Date(startDateStr);
@@ -118,29 +181,39 @@ export function ReportPanel() {
   };
 
   const getFormattedData = (data: any[]) => {
-    return data.map(v => ({
-      'Student Code': v.student_code,
-      'Student Name': v.student_name,
-      'Batch Code': v.batch_code,
-      'Center Code': v.center_code,
-      'Program Name': v.program_name || 'N/A',
-      'Education Qualification': v.education_qualification || 'N/A',
-      'Batch Start Date': v.batch_start_date || 'N/A',
-      'Days Since Batch Start': calculateDaysSince(v.batch_start_date),
-      'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
-      'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
-      'Validation Status': v.status,
-      'Validation Visit': v.visit_count || 1,
-      'Times Marked Absent': v.absent_count || (v.status === 'Absent' ? 1 : 0),
-      'Validation Attempts': Array.isArray(v.validation_history) ? v.validation_history.length : 0,
-      'Validation Type': v.validation_type || 'N/A',
-      'Recording Link': v.recording_link || 'N.A.',
-      'Remarks': v.remarks || 'N/A',
-      'Aligned AE': v.ae_name || 'N/A',
-      'Validated By': v.validated_by || 'N/A',
-      'Date': v.created_at ? formatDate(v.created_at) : 'N/A',
-      'Time': v.created_at ? formatTime(v.created_at) : 'N/A'
-    }));
+    return data.map(v => {
+      const breakdown = getStudentAttemptBreakdown(v);
+      return {
+        'Student Code': v.student_code,
+        'Student Name': v.student_name,
+        'Batch Code': v.batch_code,
+        'Center Code': v.center_code,
+        'Program Name': v.program_name || 'N/A',
+        'Education Qualification': v.education_qualification || 'N/A',
+        'Batch Start Date': v.batch_start_date || 'N/A',
+        'Days Since Batch Start': calculateDaysSince(v.batch_start_date),
+        'Mic': v.mic_on ? 'Turned On' : 'Not Turn On',
+        'Camera': v.video_on ? 'Turned On' : 'Not Turn On',
+        'Validation Status': v.status,
+        'Validation Visit Against Student': v.visit_count || 1,
+        'Validation Attempts Against Batch': breakdown.totalAttempts,
+        'Validation Count': breakdown.validatedCount,
+        'Validated in Attempt': breakdown.validatedAttempts,
+        'Revalidation Count': breakdown.revalidatedCount,
+        'Revalidated in Attempt': breakdown.revalidatedAttempts,
+        'Absent Count': breakdown.absentCount,
+        'Absent in Attempt': breakdown.absentAttempts,
+        'Rejection Count': breakdown.rejectedCount,
+        'Rejected in Attempt': breakdown.rejectedAttempts,
+        'Validation Type': v.validation_type || 'N/A',
+        'Recording Link': v.recording_link || 'N.A.',
+        'Remarks': v.remarks || 'N/A',
+        'Aligned AE': v.ae_name || 'N/A',
+        'Validated By': v.validated_by || 'N/A',
+        'Date': v.created_at ? formatDate(v.created_at) : 'N/A',
+        'Time': v.created_at ? formatTime(v.created_at) : 'N/A'
+      };
+    });
   };
 
   const handleExportExcel = (dataToExport: any[], fileName: string) => {
@@ -166,12 +239,71 @@ export function ReportPanel() {
 
   const handleExportPDF = (dataToExport: any[], fileName: string) => {
     const doc = new jsPDF('l', 'pt');
-    const tableData = dataToExport.map(v => [
-      v.student_code, v.student_name, v.batch_code, v.center_code, v.program_name || 'N/A', v.education_qualification || 'N/A', v.batch_start_date || 'N/A', calculateDaysSince(v.batch_start_date), v.mic_on ? 'Turned On' : 'Not Turn On', v.video_on ? 'Turned On' : 'Not Turn On', v.status, v.visit_count || 1, v.absent_count || (v.status === 'Absent' ? 1 : 0), Array.isArray(v.validation_history) ? v.validation_history.length : 0, v.validation_type || 'N/A', v.recording_link || 'N.A.', v.remarks || 'N/A', v.ae_name || 'N/A', v.validated_by || 'N/A', v.created_at ? formatDate(v.created_at) : 'N/A', v.created_at ? formatTime(v.created_at) : 'N/A'
-    ]);
+    const tableData = dataToExport.map(v => {
+      const breakdown = getStudentAttemptBreakdown(v);
+      return [
+        v.student_code,
+        v.student_name,
+        v.batch_code,
+        v.center_code,
+        v.program_name || 'N/A',
+        v.education_qualification || 'N/A',
+        v.batch_start_date || 'N/A',
+        calculateDaysSince(v.batch_start_date),
+        v.mic_on ? 'Turned On' : 'Not Turn On',
+        v.video_on ? 'Turned On' : 'Not Turn On',
+        v.status,
+        v.visit_count || 1,
+        breakdown.totalAttempts,
+        breakdown.validatedCount,
+        breakdown.validatedAttempts || '-',
+        breakdown.revalidatedCount,
+        breakdown.revalidatedAttempts || '-',
+        breakdown.absentCount,
+        breakdown.absentAttempts || '-',
+        breakdown.rejectedCount,
+        breakdown.rejectedAttempts || '-',
+        v.validation_type || 'N/A',
+        v.recording_link || 'N.A.',
+        v.remarks || 'N/A',
+        v.ae_name || 'N/A',
+        v.validated_by || 'N/A',
+        v.created_at ? formatDate(v.created_at) : 'N/A',
+        v.created_at ? formatTime(v.created_at) : 'N/A'
+      ];
+    });
     
     (doc as any).autoTable({
-      head: [['Student Code', 'Student Name', 'Batch Code', 'Center Code', 'Program Name', 'Education Qual.', 'Batch Start Date', 'Days Since Start', 'Mic', 'Camera', 'Validation Status', 'Visit #', 'Absent Count', 'Attempts', 'Validation Type', 'Recording Link', 'Remarks', 'Aligned AE', 'Validated By', 'Date', 'Time']],
+      head: [[
+        'Student Code',
+        'Student Name',
+        'Batch Code',
+        'Center Code',
+        'Program Name',
+        'Education Qual.',
+        'Batch Start Date',
+        'Days Since Start',
+        'Mic',
+        'Camera',
+        'Validation Status',
+        'Validation Visit Against Student',
+        'Validation Attempts Against Batch',
+        'Validation Count',
+        'Validated In Attempt',
+        'Revalidation Count',
+        'Revalidated In Attempt',
+        'Absent Count',
+        'Absent In Attempt',
+        'Rejection Count',
+        'Rejected In Attempt',
+        'Validation Type',
+        'Recording Link',
+        'Remarks',
+        'Aligned AE',
+        'Validated By',
+        'Date',
+        'Time'
+      ]],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: '#0d9488' }
@@ -653,8 +785,16 @@ export function ReportPanel() {
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Mic</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Camera</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Status</th>
-                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Visit #</th>
-                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Times Absent</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Visit Against Student</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Attempts Against Batch</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Count</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validated In Attempt</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Revalidation Count</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Revalidated In Attempt</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Absent Count</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Absent In Attempt</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Rejection Count</th>
+                          <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Rejected In Attempt</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">History Log</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Validation Type</th>
                           <th className="px-6 py-4 bg-[#f8fafc] sticky top-0">Recording Link</th>
@@ -665,7 +805,9 @@ export function ReportPanel() {
                         </tr>
                       </thead>
                     <tbody className="divide-y divide-brand-divide">
-                      {selectedBatchData.map((v, idx) => (
+                      {selectedBatchData.map((v, idx) => {
+                        const breakdown = getStudentAttemptBreakdown(v);
+                        return (
                         <motion.tr 
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -731,14 +873,69 @@ export function ReportPanel() {
                             </span>
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
-                            <span className={cn(
-                              "font-bold text-xs px-2 py-1 rounded-lg border",
-                              (v.absent_count || (v.status === 'Absent' ? 1 : 0)) > 0 
-                                ? "bg-amber-50 text-amber-700 border-amber-200" 
-                                : "bg-slate-50 text-slate-400 border-slate-200"
-                            )}>
-                              {v.absent_count || (v.status === 'Absent' ? 1 : 0)}x
+                            <span className="font-bold text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 font-mono">
+                              {breakdown.totalAttempts}
                             </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-center">
+                            <span className={cn(
+                              "font-bold text-xs px-2.5 py-1 rounded-lg border font-mono",
+                              breakdown.validatedCount > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {breakdown.validatedCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            {breakdown.validatedAttempts ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {breakdown.validatedAttempts}
+                              </span>
+                            ) : <span className="text-slate-300 text-xs font-mono">-</span>}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-center">
+                            <span className={cn(
+                              "font-bold text-xs px-2.5 py-1 rounded-lg border font-mono",
+                              breakdown.revalidatedCount > 0 ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {breakdown.revalidatedCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            {breakdown.revalidatedAttempts ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                {breakdown.revalidatedAttempts}
+                              </span>
+                            ) : <span className="text-slate-300 text-xs font-mono">-</span>}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-center">
+                            <span className={cn(
+                              "font-bold text-xs px-2.5 py-1 rounded-lg border font-mono",
+                              breakdown.absentCount > 0 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {breakdown.absentCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            {breakdown.absentAttempts ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                {breakdown.absentAttempts}
+                              </span>
+                            ) : <span className="text-slate-300 text-xs font-mono">-</span>}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-center">
+                            <span className={cn(
+                              "font-bold text-xs px-2.5 py-1 rounded-lg border font-mono",
+                              breakdown.rejectedCount > 0 ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-slate-50 text-slate-400 border-slate-200"
+                            )}>
+                              {breakdown.rejectedCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            {breakdown.rejectedAttempts ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                {breakdown.rejectedAttempts}
+                              </span>
+                            ) : <span className="text-slate-300 text-xs font-mono">-</span>}
                           </td>
                           <td className="px-6 py-3 whitespace-nowrap">
                             <button
@@ -776,7 +973,8 @@ export function ReportPanel() {
                             {v.created_at && <p className="text-[10px] text-slate-400 font-mono">{formatTime(v.created_at)}</p>}
                           </td>
                         </motion.tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                   </div>
