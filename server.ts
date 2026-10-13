@@ -41,6 +41,7 @@ async function runMigrations(isManual = false) {
     await sql`ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_username_key;`;
     await sql`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT false;`;
     await sql`UPDATE public.profiles SET is_disabled = false WHERE is_disabled IS NULL OR is_disabled = true AND (role = 'admin' OR LOWER(username) IN ('admin', 'arnab.roy', 'arnab'));`;
+    await sql`UPDATE public.profiles SET username = TRIM(username) WHERE username IS NOT NULL AND username <> TRIM(username);`;
     
     // 2. Ensure student_validations table exists
     await sql`
@@ -793,9 +794,13 @@ export const app = express();
     const { username } = req.body;
     try {
       const cleanUsername = (username || '').trim();
+      if (!cleanUsername) {
+        return res.status(400).json({ error: 'Username cannot be blank.' });
+      }
       const isMasterAdmin = cleanUsername.toLowerCase() === 'admin';
+      const sanitizedUsername = cleanUsername.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-      // Try case-insensitive matching on username
+      // 1. Try direct case-insensitive matching on username
       let { data: profile, error } = await supabaseAdmin
         .from('profiles')
         .select('email, id, role, is_disabled, username')
@@ -803,7 +808,7 @@ export const app = express();
         .maybeSingle();
       
       if (!profile) {
-        // Fallback to exact match or email match
+        // 2. Fallback to exact match
         const { data: exactProf } = await supabaseAdmin
           .from('profiles')
           .select('email, id, role, is_disabled, username')
@@ -812,26 +817,87 @@ export const app = express();
         profile = exactProf;
       }
 
+      if (!profile) {
+        // 3. Fallback to direct email match
+        const { data: emailProf } = await supabaseAdmin
+          .from('profiles')
+          .select('email, id, role, is_disabled, username')
+          .ilike('email', cleanUsername)
+          .maybeSingle();
+        profile = emailProf;
+      }
+
+      if (!profile && sanitizedUsername) {
+        // 4. Fallback to internal email matching (e.g. basavarajudeepthi@validpro.internal)
+        const { data: intEmailProf } = await supabaseAdmin
+          .from('profiles')
+          .select('email, id, role, is_disabled, username')
+          .ilike('email', `${sanitizedUsername}@validpro.internal`)
+          .maybeSingle();
+        profile = intEmailProf;
+      }
+
+      if (!profile) {
+        // 5. Flexible scan across all profiles (handles trimming, punctuation, dots vs no dots)
+        const { data: allProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('email, id, role, is_disabled, username');
+
+        if (allProfiles && allProfiles.length > 0) {
+          profile = allProfiles.find((p: any) => {
+            const pUser = (p.username || '').trim().toLowerCase();
+            const pSanitized = pUser.replace(/[^a-z0-9]/g, '');
+            const pEmail = (p.email || '').trim().toLowerCase();
+            const pEmailPrefix = pEmail.split('@')[0];
+            const pEmailPrefixSanitized = pEmailPrefix.replace(/[^a-z0-9]/g, '');
+
+            return pUser === cleanUsername.toLowerCase() ||
+                   (pSanitized && pSanitized === sanitizedUsername) ||
+                   pEmail === cleanUsername.toLowerCase() ||
+                   pEmailPrefix === cleanUsername.toLowerCase() ||
+                   (pEmailPrefixSanitized && pEmailPrefixSanitized === sanitizedUsername) ||
+                   (sanitizedUsername && pEmail.startsWith(`${sanitizedUsername}@`));
+          });
+
+          // If found in flexible scan, self-heal username in profiles table if it had leading/trailing spaces
+          if (profile && profile.username && profile.username !== profile.username.trim()) {
+            await supabaseAdmin.from('profiles').update({ username: profile.username.trim() }).eq('id', profile.id);
+            profile.username = profile.username.trim();
+          }
+        }
+      }
+
       // Check if user account is disabled (Admins & master admin are NEVER disabled)
       if (profile && profile.is_disabled && !isMasterAdmin && profile.role !== 'admin' && cleanUsername.toLowerCase() !== 'arnab.roy') {
         return res.status(403).json({ error: 'Your account is disabled. Please contact the administrator.' });
       }
 
       if (!profile) {
-        // Check directly in Auth users in case profile row is missing
+        // 6. Check directly in Auth users in case profile row is missing or desynchronized
         const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
         if (!listErr && listData && listData.users) {
-          const matchedAuthUser = listData.users.find((u: any) => 
-            u.user_metadata?.username?.toLowerCase() === cleanUsername.toLowerCase() ||
-            u.email?.toLowerCase().startsWith(`${cleanUsername.toLowerCase()}@`) ||
-            u.email?.toLowerCase() === cleanUsername.toLowerCase()
-          );
+          const matchedAuthUser = listData.users.find((u: any) => {
+            const metaUser = (u.user_metadata?.username || '').trim().toLowerCase();
+            const metaSanitized = metaUser.replace(/[^a-z0-9]/g, '');
+            const uEmail = (u.email || '').trim().toLowerCase();
+            const uEmailPrefix = uEmail.split('@')[0];
+            const uEmailPrefixSanitized = uEmailPrefix.replace(/[^a-z0-9]/g, '');
+
+            return metaUser === cleanUsername.toLowerCase() ||
+                   (metaSanitized && metaSanitized === sanitizedUsername) ||
+                   uEmail === cleanUsername.toLowerCase() ||
+                   uEmailPrefix === cleanUsername.toLowerCase() ||
+                   (uEmailPrefixSanitized && uEmailPrefixSanitized === sanitizedUsername) ||
+                   (sanitizedUsername && uEmail.startsWith(`${sanitizedUsername}@`)) ||
+                   uEmail.startsWith(`${cleanUsername.toLowerCase()}@`);
+          });
 
           if (matchedAuthUser && matchedAuthUser.email) {
             // Auto-heal profile table
+            const resolvedUsername = (matchedAuthUser.user_metadata?.username || cleanUsername).trim();
             await supabaseAdmin.from('profiles').upsert({
               id: matchedAuthUser.id,
-              username: cleanUsername,
+              username: resolvedUsername,
               email: matchedAuthUser.email,
               role: isMasterAdmin ? 'admin' : 'user',
               is_disabled: false
@@ -842,7 +908,7 @@ export const app = express();
         }
 
         console.error(`[Login] Profile search failed for "${cleanUsername}":`, error?.message || 'Not found');
-        return res.status(404).json({ error: `User profile not found for "${cleanUsername}". Did you run Setup?` });
+        return res.status(404).json({ error: `User profile not found for "${cleanUsername}". Please verify your username or ask an administrator to add your account in the Admin Panel.` });
       }
 
       // If email is null in DB (older rows), grab it from auth
@@ -851,6 +917,7 @@ export const app = express();
         if (authErr || !authUser.user) {
           return res.status(404).json({ error: 'Auth user not found (missing email).' });
         }
+        await supabaseAdmin.from('profiles').update({ email: authUser.user.email }).eq('id', profile.id);
         return res.json({ email: authUser.user.email });
       }
 
@@ -963,16 +1030,21 @@ export const app = express();
     const { username, password, role, email } = req.body;
     
     try {
+      const cleanUsername = (username || '').trim();
+      if (!cleanUsername) {
+        return res.status(400).json({ error: 'Username is required and cannot be blank.' });
+      }
+
       // 1. Create Auth User
       // Sanitize username for email if no email provided
-      const sanitizedUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const userEmail = email || `${sanitizedUsername}@validpro.internal`;
+      const sanitizedUsername = cleanUsername.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const userEmail = (email || '').trim() || `${sanitizedUsername}@validpro.internal`;
 
       const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: userEmail,
         password: password,
         email_confirm: true,
-        user_metadata: { username }
+        user_metadata: { username: cleanUsername }
       });
 
       if (authError) {
@@ -986,9 +1058,10 @@ export const app = express();
         .from('profiles')
         .upsert({
           id: authUser.user.id,
-          username,
+          username: cleanUsername,
           email: userEmail,
-          role: role || 'user'
+          role: role || 'user',
+          is_disabled: false
         }, { onConflict: 'id' });
 
       if (profileError) {

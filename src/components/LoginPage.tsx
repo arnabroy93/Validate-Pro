@@ -78,10 +78,15 @@ export function LoginPage() {
     setLoading(true);
 
     try {
+      const cleanUsername = username.trim();
+      if (!cleanUsername) {
+        throw new Error('Please enter your username');
+      }
+
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
+        body: JSON.stringify({ username: cleanUsername })
       });
       
       const contentType = res.headers.get('content-type');

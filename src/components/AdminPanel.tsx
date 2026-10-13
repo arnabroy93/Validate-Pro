@@ -352,12 +352,17 @@ export function AdminPanel({ forcedTab }: { forcedTab?: 'users' | 'records' | 'h
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanUsername = newUser.username.trim();
+    if (!cleanUsername) {
+      toast.error('Please enter a username');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify({ ...newUser, username: cleanUsername })
       });
       if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) throw new Error('Failed to create user');
       const data = await res.json();
