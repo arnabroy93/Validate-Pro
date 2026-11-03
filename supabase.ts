@@ -9,9 +9,57 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+export function clearLocalAuthTokens() {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.includes('supabase') || key.includes('-auth-token') || key.startsWith('sb-'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn('[Auth] Error clearing tokens:', e);
+  }
+}
+
+const customFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  if (
+    typeof input === 'string' &&
+    input.includes('token?grant_type=refresh_token') &&
+    response.status === 400
+  ) {
+    try {
+      const clone = response.clone();
+      const body = await clone.json();
+      if (
+        body?.error === 'invalid_grant' ||
+        body?.error_description?.includes('Refresh Token') ||
+        body?.msg?.includes('Refresh Token')
+      ) {
+        clearLocalAuthTokens();
+      }
+    } catch {}
+  }
+  return response;
+};
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    global: {
+      fetch: customFetch,
+    },
+  }
 );
 
 export type BatchStudent = {

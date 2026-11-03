@@ -93,16 +93,16 @@ export const FeaturesProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   const saveSettings = async (globalFlags: Features, overrides: Record<string, Partial<Features>>) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    
-    if (token) {
-      const payload = {
-        ...globalFlags,
-        user_overrides: overrides
-      };
+    try {
+      const sessionRes = await supabase.auth.getSession().catch(() => ({ data: { session: null }, error: null }));
+      const token = sessionRes?.data?.session?.access_token;
+      
+      if (token) {
+        const payload = {
+          ...globalFlags,
+          user_overrides: overrides
+        };
 
-      try {
         const res = await fetch('/api/settings/features', {
           method: 'POST',
           headers: {
@@ -114,9 +114,9 @@ export const FeaturesProvider = ({ children }: { children: React.ReactNode }) =>
         if (!res.ok) {
           console.error('Failed to save feature settings:', await res.text());
         }
-      } catch (err) {
-        console.error('Error saving feature settings:', err);
       }
+    } catch (err) {
+      console.warn('[Features] Error saving feature settings:', err);
     }
   };
 

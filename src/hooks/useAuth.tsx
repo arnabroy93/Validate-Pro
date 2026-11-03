@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { supabase, type Profile } from '../../supabase';
+import { supabase, type Profile, clearLocalAuthTokens } from '../../supabase';
 import { type User } from '@supabase/supabase-js';
 import { toast } from 'react-hot-toast';
 
@@ -11,6 +11,21 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function isRefreshTokenError(err: any): boolean {
+  if (!err) return false;
+  const msg = typeof err === 'string'
+    ? err
+    : (err.message || err.error_description || err.error || err.msg || String(err));
+  const isAuth = err.name === 'AuthApiError' || err.__isAuthError || err.status === 400;
+  return (
+    msg.includes('Invalid Refresh Token') ||
+    msg.includes('Refresh Token Not Found') ||
+    msg.includes('refresh_token_not_found') ||
+    msg.includes('invalid_grant') ||
+    (isAuth && msg.toLowerCase().includes('refresh token'))
+  );
+}
 
 // Helper to create an immediate optimistic profile from Supabase User
 function createOptimisticProfile(authUser: User): Profile {
@@ -48,22 +63,6 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number, fallbackValue: T): 
     }),
     timeoutPromise
   ]);
-}
-
-// Clear all supabase tokens from localStorage
-function clearLocalAuthTokens() {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.includes('supabase') || key.includes('-auth-token') || key.includes('sb-'))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
-  } catch (e) {
-    console.warn('[Auth] Error clearing tokens:', e);
-  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -200,21 +199,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        // Fast session check with 2s timeout
-        const sessionPromise = supabase.auth.getSession();
+        // Fast session check with 2s timeout and safe catch
+        const sessionPromise = supabase.auth.getSession().catch((err) => {
+          if (isRefreshTokenError(err)) {
+            clearLocalAuthTokens();
+          }
+          return { data: { session: null }, error: null };
+        });
+
         const { data, error } = await withTimeout(
           sessionPromise,
           2000,
           { data: { session: null }, error: null } as any
         );
 
-        if (error) {
-          const isRefreshTokenError = error?.message?.includes('Refresh Token') || 
-                                      error?.message?.includes('refresh_token');
-          if (isRefreshTokenError) {
-            clearLocalAuthTokens();
-            await supabase.auth.signOut().catch(() => {});
-          }
+        if (error && isRefreshTokenError(error)) {
+          clearLocalAuthTokens();
+          await supabase.auth.signOut().catch(() => {});
         }
 
         const session = data?.session;
@@ -238,6 +239,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error: any) {
         console.warn('[Auth] Initialization error handled:', error);
+        if (isRefreshTokenError(error)) {
+          clearLocalAuthTokens();
+        }
         if (isMounted) {
           setUser(null);
           setProfile(null);

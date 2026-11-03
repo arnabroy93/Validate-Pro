@@ -529,6 +529,7 @@ export function Dashboard() {
 
   const VALIDATED_BY_OPTIONS = [
     "Arnab Roy",
+    "Basavaraju Deepthi",
     "Biswajit Chakraborty",
     "Bramha Das",
     "Karishma Tiwari",
